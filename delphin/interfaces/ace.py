@@ -124,6 +124,94 @@ class AceGenerator(AceProcess):
         return response
 
 
+class InteractiveAce(AceProcess):
+    """
+    InteractiveAce class opens an instance of ACE in LUI mode
+    to interact with ACE via the LUI.
+    
+    This overrides __exit__() to do nothing.
+    Make sure to use close() when this is done!
+    """
+
+    def send(self, datum):
+        self._p.stdin.write('parse "%s"^L' % datum.rstrip())
+        self._p.stdin.flush()
+    
+    def _open(self):
+        command = [
+            self.executable,
+            '-l',
+            '--lui-fd=1',
+            '--input-from-lui',
+            '-g',
+            self.grm,
+        ]
+        command += self.cmdargs
+        self._p = Popen(
+            command,
+            stdin=PIPE,
+            stdout=PIPE,
+            stderr=STDOUT,
+            universal_newlines=True
+        )
+
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False  # don't try to handle any exceptions
+
+
+class InteractiveAceParser(InteractiveAce):
+    """
+    InteractiveAceParser implements an AceParser object with the __exit__()
+    method overriden to allow for ACE to be interacted with over a longer
+    period of time.
+    """
+    
+    def receive(self):
+        response = {
+            'SENT': None,
+            'RESULTS': []
+        }
+
+        stdout = self._p.stdout
+        while True:
+            line = stdout.readline().rstrip()
+            if line.strip() == '':
+                blank += 1
+                if blank >= 2:
+                    break
+            else:
+                blank = 0
+                if line.startswith('group '):
+                    response['SENT'] = line.split(" ", 2)[2]
+                elif line.startswith('SKIP: '):
+                    continue
+                else:
+                    raw_deriv = line.rstrip().split(None, 2)
+                    deriv = raw_deriv[2]
+                    tree_ID = raw_deriv[1]
+                    top_edge_ID = deriv[len("#T["):].partition(' ')[0]
+                    mrs = requestMRS(tree_ID, top_edge_ID)
+                    response['RESULTS'].append({
+                        'MRS': mrs.strip(),
+                        'DERIV': deriv.strip()
+                    })
+        return response
+
+    def _browse(self, tree_ID, edge_ID, what):
+        self._p.stdin.write('browse %s %s %s^L' % (tree_ID, edge_ID, what))
+        self._p.stdin.flush()
+
+    def get_MRS(self, tree_ID, edge_ID):
+        self._browse(tree_ID, edge_ID, "mrs simple")
+        mrs = self._p.stdout
+        # mrs == "avm XYZ <MRS> "Simple MRS"
+        return mrs.split(None, 2)[2].rsplit('"', 2)[0]
+
+    def request_AVM(self, tree_ID, edge_ID):
+        self._browse(tree_ID, edge_ID, "avm")
+        return self._p.stdout
+
+
 def compile(cfg_path, out_path, log=None):
     #debug('Compiling grammar at {}'.format(abspath(cfg_path)), log)
     try:
