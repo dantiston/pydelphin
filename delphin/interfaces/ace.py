@@ -3,6 +3,7 @@
 
 import logging
 import os
+import asyncio
 from subprocess import (check_call, CalledProcessError, Popen, PIPE, STDOUT)
 
 class AceProcess(object):
@@ -19,7 +20,8 @@ class AceProcess(object):
 
     def _open(self):
         self._p = Popen(
-            [self.executable, '-g', self.grm] + self._cmdargs + self.cmdargs,
+            [self.executable, '-g', self.grm] +\
+                self._cmdargs + self.cmdargs,
             stdin=PIPE,
             stdout=PIPE,
             stderr=STDOUT,
@@ -54,6 +56,12 @@ class AceProcess(object):
             logging.debug('ACE cleanup: {}'.format(line.rstrip()))
         retval = self._p.wait()
         return retval
+
+    def set_roots(roots):
+        if isinstance(roots, basestring):
+            self.cmdargs.extend(['r', roots])
+        else:
+            self.cmdargs.extend(['r'].extend(roots))
 
 
 class AceParser(AceProcess):
@@ -108,7 +116,7 @@ class AceGenerator(AceProcess):
         results = []
 
         stdout = self._p.stdout
-        line = stdout.readline().rstrip()
+        line = stdout.read()
         while not line.startswith('NOTE: '):
             if line.startswith('WARNING') or line.startswith('ERROR'):
                 level, message = line.split(': ', 1)
@@ -133,20 +141,19 @@ class InteractiveAce(AceProcess):
     Make sure to use close() when this is done!
     """
 
-    def send(self, datum):
-        self._p.stdin.write('parse "%s"^L' % datum.rstrip())
-        self._p.stdin.flush()
-    
+    first_parse = True
+
     def _open(self):
+
         command = [
             self.executable,
             '-l',
-            '--lui-fd=1',
+            #'--lui-fd=1',
             '--input-from-lui',
             '-g',
             self.grm,
-        ]
-        command += self.cmdargs
+        ] + self.cmdargs
+        #print("**** OPENING ACE WITH {} ****".format(command))
         self._p = Popen(
             command,
             stdin=PIPE,
@@ -155,61 +162,126 @@ class InteractiveAce(AceProcess):
             universal_newlines=True
         )
 
-    def __exit__(self, exc_type, exc_value, traceback):
-        return False  # don't try to handle any exceptions
+        #loop = asyncio.get_event_loop()
+        #loop.run_until_complete(process_header(self))
+        #loop.close()
 
+    def parse(self, datum):
+        self.send_parse(datum)
+        return self.receive_parse()
 
-class InteractiveAceParser(InteractiveAce):
-    """
-    InteractiveAceParser implements an AceParser object with the __exit__()
-    method overriden to allow for ACE to be interacted with over a longer
-    period of time.
-    """
-    
-    def receive(self):
-        response = {
-            'SENT': None,
-            'RESULTS': []
-        }
+    def send_parse(self, datum):
+        # NEWLINE VERY IMPORTANT
+        #self._p.stdin.write('parse %s^L\n' % datum.rstrip())
+        self._p.stdin.write('%s\n' % datum.rstrip())
+        self._p.stdin.flush()
 
-        stdout = self._p.stdout
-        while True:
-            line = stdout.readline().rstrip()
-            if line.strip() == '':
-                blank += 1
-                if blank >= 2:
-                    break
-            else:
-                blank = 0
-                if line.startswith('group '):
-                    response['SENT'] = line.split(" ", 2)[2]
-                elif line.startswith('SKIP: '):
-                    continue
+    def receive_parse(self):
+
+        self.result = []
+        self.blank = 0
+
+        @asyncio.coroutine
+        def process_header(self):
+            """
+            Need to consume 7 lines of stdout from LUI
+            """
+            line = self._p.stdout.__next__()
+            while True:
+                line = self._p.stdout.__next__()
+                if not line:
+                    return
+
+        @asyncio.coroutine
+        def process_parse_results(self):
+            blank = 0
+            for line in self._p.stdout:
+                if not line.strip():
+                    self.blank += 1
+                    if self.blank >= 3:
+                        return self.result
                 else:
-                    raw_deriv = line.rstrip().split(None, 2)
-                    deriv = raw_deriv[2]
-                    tree_ID = raw_deriv[1]
-                    top_edge_ID = deriv[len("#T["):].partition(' ')[0]
-                    mrs = requestMRS(tree_ID, top_edge_ID)
-                    response['RESULTS'].append({
-                        'MRS': mrs.strip(),
-                        'DERIV': deriv.strip()
-                    })
-        return response
+                    if line.startswith("LUI: unknown "):
+                        line = line[len("LUI: unknown "):]
+                    self.result.append(line)
+                    print(line, end="")
+
+        if self.first_parse:
+            #loop = asyncio.get_event_loop()
+            #loop.run_until_complete(process_header(self))
+            #loop.close()
+            self.first_parse = False
+
+        loop = asyncio.get_event_loop()
+        print(loop.run_until_complete(process_parse_results(self)))
+        loop.close()
+
+        # response = {
+        #     'SENT': None,
+        #     'RESULTS': []
+        # }
+
+        # print("I got to receive_parse()")
+        # blank = 0
+        # stdout = self._p.stdout
+        # #output = yield from stdout
+        # #for line in output:
+        # #    print("I got here")
+        # #    print(line)
+        # return
+        # while True:
+        #     line = stdout.readline().rstrip()
+        #     if line.strip() == '':
+        #         blank += 1
+        #         if blank >= 2:
+        #             break
+        #     else:
+        #         #line = line[len('LUI: unknown '):]
+        #         blank = 0
+        #         if line.startswith('`parameter '):
+        #             continue
+        #         if line.startswith('`group '):
+        #             response['SENT'] = line.split(" ", 2)[2].strip('"')
+        #         elif line.startswith('SKIP: '):
+        #             continue
+        #         elif line.startswith('`tree '):
+        #             raw_deriv = line.rstrip().split(None, 2)
+        #             deriv = raw_deriv[2]
+        #             tree_ID = raw_deriv[1]
+        #             top_edge_ID = deriv[len("#T["):].partition(' ')[0]
+        #             mrs = self.request_mrs(tree_ID, top_edge_ID)
+        #             response['RESULTS'].append({
+        #                 'MRS': mrs.strip(),
+        #                 'DERIV': deriv.strip()
+        #             })
+        
+        # self._p.stdout.flush()
+        # self._p.stdin.flush()
+        # return response
 
     def _browse(self, tree_ID, edge_ID, what):
         self._p.stdin.write('browse %s %s %s^L' % (tree_ID, edge_ID, what))
         self._p.stdin.flush()
 
-    def get_MRS(self, tree_ID, edge_ID):
+    def request_mrs(self, tree_ID, edge_ID):
         self._browse(tree_ID, edge_ID, "mrs simple")
-        mrs = self._p.stdout
+        mrs = self._p.stdout # relies on wxlui set up to cat STDOUT
         # mrs == "avm XYZ <MRS> "Simple MRS"
         return mrs.split(None, 2)[2].rsplit('"', 2)[0]
 
-    def request_AVM(self, tree_ID, edge_ID):
+    def request_avm(self, tree_ID, edge_ID):
         self._browse(tree_ID, edge_ID, "avm")
-        return self._p.stdout
+        return self._p.stdout.readline().rstrip()
+    
+    def __exit__(self, exc_type, exc_value, traceback):
+        return False  # don't try to handle any exceptions
+
+    def interact(self):
+        """
+        Don't use this!
+        """
+        raise Warning("InteractiveAce#interact() is not defined.")
+
 
 
 def compile(cfg_path, out_path, log=None):
