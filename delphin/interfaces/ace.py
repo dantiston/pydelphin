@@ -1,9 +1,10 @@
 
 """ACE interface"""
 
+import re
 import logging
 import os
-import asyncio
+import pexpect
 from subprocess import (check_call, CalledProcessError, Popen, PIPE, STDOUT)
 
 class AceProcess(object):
@@ -141,137 +142,221 @@ class InteractiveAce(AceProcess):
     Make sure to use close() when this is done!
     """
 
-    first_parse = True
+    def __init__(self, grm, cmdargs=None, executable=None):
+        #first_parse = True
 
+        # CONDITIONS
+        ## HEADER
+        # 0: PARSE X -> Skip this line
+        # 1: GROUP X -> Get the parse count (X)
+        # 2: SKIP: -> no parses, return
+        # 3: LUI: unknown X -> no parses, return
+        # 4: <error> -> raise error
+        ## PARSES
+        # 0: tree X -> Get the tree ID, top node ID, load tree into data, get MRS
+        # 1: LUI: unknown X -> no parses, return
+        # 1: <error> -> raise error
+        
+        
+        self.ace_parse_header_tags = [
+            r"parse .*\r\n", # 0
+            r"group .*\r\n", # 1
+            r"SKIP: .*\r\n", # 2
+            r"LUI: unknown .*\r\n", # 3
+            pexpect.EOF, # 4
+            pexpect.TIMEOUT, # 5
+        ]
+        
+        self.ace_header_actions = {
+            0:self._pass,
+            1:self._extract_parse_count,
+            2:self._no_parse,
+            3:self._no_parse,
+            4:self._raise_exception,
+            5:self._raise_exception, # TODO: Something different
+        }
+
+        self.ace_result_tags = [
+            r"tree .*\r\n", # 0
+            r"LUI: unknown .*\r\n", # 1
+            pexpect.EOF, # 2
+            pexpect.TIMEOUT, # 3
+        ]
+
+        self.ace_result_actions = {
+            0:self._extract_parse,
+            1:self._no_parse,
+            2:self._no_parse,
+            3:self._raise_exception, # TODO: Something different
+        }
+                
+        self.ace_header = re.compile(r"(parameter *\r\n)*ACE: reading input from LUI\r\n")
+
+        super().__init__(grm)
+
+    def _pass(self, datum=""):
+        pass
+    
     def _open(self):
 
         command = [
-            self.executable,
             '-l',
-            #'--lui-fd=1',
+            '--lui-fd=1',
             '--input-from-lui',
             '-g',
             self.grm,
         ] + self.cmdargs
-        #print("**** OPENING ACE WITH {} ****".format(command))
-        self._p = Popen(
-            command,
-            stdin=PIPE,
-            stdout=PIPE,
-            stderr=STDOUT,
-            universal_newlines=True
-        )
 
-        #loop = asyncio.get_event_loop()
-        #loop.run_until_complete(process_header(self))
-        #loop.close()
+        self._p = pexpect.spawnu(self.executable, command)
+        #self._p.maxread = 4096
+        #self._p.searchwindowsize = 10240
+        
+        self.ace_result_tags = self._p.compile_pattern_list(self.ace_result_tags)
+        
+        self._process_header()
+
+        self.parse_count = {}
+
+    def _process_header(self):
+        """Header takes the form:
+
+        parameter list-type *list*
+
+        parameter empty-list-type *null*
+
+        parameter non-empty-list-type *cons*
+
+        parameter avm-collapsed-types [u i p e x h]
+
+        ACE: reading input from LUI
+
+        """
+
+        self._p.expect(self.ace_header)
 
     def parse(self, datum):
-        self.send_parse(datum)
-        return self.receive_parse()
+        self._send_parse(datum)
+        return self._receive_parse(datum)
 
-    def send_parse(self, datum):
+    def _send_parse(self, datum):
         # NEWLINE VERY IMPORTANT
         #self._p.stdin.write('parse %s^L\n' % datum.rstrip())
-        self._p.stdin.write('%s\n' % datum.rstrip())
-        self._p.stdin.flush()
+        #self._p.stdin.write('%s\n' % datum.rstrip())
+        #self._p.stdin.flush()
 
-    def receive_parse(self):
+        self._p.sendline('parse %s' % datum.rstrip())
+
+    def _receive_parse(self, datum):
 
         self.result = []
         self.blank = 0
 
-        @asyncio.coroutine
-        def process_header(self):
-            """
-            Need to consume 7 lines of stdout from LUI
-            """
-            line = self._p.stdout.__next__()
-            while True:
-                line = self._p.stdout.__next__()
-                if not line:
-                    return
+        response = {
+            'SENT': None,
+            'RESULTS': []
+        }
 
-        @asyncio.coroutine
-        def process_parse_results(self):
-            blank = 0
-            for line in self._p.stdout:
-                if not line.strip():
-                    self.blank += 1
-                    if self.blank >= 3:
-                        return self.result
-                else:
-                    if line.startswith("LUI: unknown "):
-                        line = line[len("LUI: unknown "):]
-                    self.result.append(line)
-                    print(line, end="")
+        # Get parse count
+        # TODO: Figure out what to do if ACE output malformed?
+        self.parse_count[datum] = -1
+        while self.parse_count[datum] < 0:
+            ID = self._p.expect(self.ace_parse_header_tags)
+            self.ace_header_actions[ID](datum=datum)
 
-        if self.first_parse:
-            #loop = asyncio.get_event_loop()
-            #loop.run_until_complete(process_header(self))
-            #loop.close()
-            self.first_parse = False
+        # Get all of the reported parses
+        """
+        TODO:
+            * Need to get SENT
+            * It regularly doesn't work. Increase wait time?
+        """
+        parses = []
+        for i in range(self.parse_count[datum]):
+            print("Getting parse {}".format(i))
+            ID = self._p.expect(self.ace_result_tags)
+            parses.append(self.ace_result_actions[ID]())
 
-        loop = asyncio.get_event_loop()
-        print(loop.run_until_complete(process_parse_results(self)))
-        loop.close()
+        # Get the MRS for each of the reported parses
+        for i in range(self.parse_count[datum]):
+            print("Getting mrs {}".format(i))
+            deriv_ID = parses[i][1]
+            deriv = parses[i][2]
+            top_edge_ID = deriv[len("#T["):].partition(' ')[0]
+            # Get MRS
+            mrs = self._request_mrs(deriv_ID, top_edge_ID)
+            print("GOT DERIV AND MRS")
+            response['RESULTS'].append({
+                'MRS': mrs.strip(),
+                'DERIV': deriv.strip(),
+            })
 
-        # response = {
-        #     'SENT': None,
-        #     'RESULTS': []
-        # }
+        return response
 
-        # print("I got to receive_parse()")
-        # blank = 0
-        # stdout = self._p.stdout
-        # #output = yield from stdout
-        # #for line in output:
-        # #    print("I got here")
-        # #    print(line)
-        # return
-        # while True:
-        #     line = stdout.readline().rstrip()
-        #     if line.strip() == '':
-        #         blank += 1
-        #         if blank >= 2:
-        #             break
-        #     else:
-        #         #line = line[len('LUI: unknown '):]
-        #         blank = 0
-        #         if line.startswith('`parameter '):
-        #             continue
-        #         if line.startswith('`group '):
-        #             response['SENT'] = line.split(" ", 2)[2].strip('"')
-        #         elif line.startswith('SKIP: '):
-        #             continue
-        #         elif line.startswith('`tree '):
-        #             raw_deriv = line.rstrip().split(None, 2)
-        #             deriv = raw_deriv[2]
-        #             tree_ID = raw_deriv[1]
-        #             top_edge_ID = deriv[len("#T["):].partition(' ')[0]
-        #             mrs = self.request_mrs(tree_ID, top_edge_ID)
-        #             response['RESULTS'].append({
-        #                 'MRS': mrs.strip(),
-        #                 'DERIV': deriv.strip()
-        #             })
-        
-        # self._p.stdout.flush()
-        # self._p.stdin.flush()
-        # return response
+    def _extract_parse_count(self, datum=""):
+        """
+        Expected format: \group <count> "<text>"\
+        """
+        if not self.parse_count:
+            self.parse_count = {}
+        match = self._p.after.split(None, 2)
+        if match[0] != "group":
+            raise Exception("Something bad happened at InteractiveAce#_extract_parse_count()")
+        text = match[2]
+        if datum not in text:
+            raise Exception("The parse input is not in the parse output at InteractiveAce#_extract_parse_count()")
+        count = int(match[1])
+        self.parse_count[datum] = count
+
+    def _extract_parse(self):
+        """
+        Expected format: 
+            \tree <tree_ID> #T[<top_edge_ID> "<label>" "<token>" <unk> <rule_name> (#T[.*])?] "<text>"\
+        """
+
+        match = self._p.after.split(None, 2)
+        return match
 
     def _browse(self, tree_ID, edge_ID, what):
-        self._p.stdin.write('browse %s %s %s^L' % (tree_ID, edge_ID, what))
-        self._p.stdin.flush()
+        #self._p.stdin.write('browse %s %s %s^L' % (tree_ID, edge_ID, what))
+        #self._p.stdin.flush()
+        self._p.sendline('browse %s %s %s' % (tree_ID, edge_ID, what))
 
-    def request_mrs(self, tree_ID, edge_ID):
+    def _request_mrs(self, tree_ID, edge_ID):
+        print("I got to InteractiveAce#_request_mrs()!")
         self._browse(tree_ID, edge_ID, "mrs simple")
-        mrs = self._p.stdout # relies on wxlui set up to cat STDOUT
-        # mrs == "avm XYZ <MRS> "Simple MRS"
+        ID = -1
+        while True:
+            ID = self._p.expect(['browse .*\r\n', 'avm .*\r\n']) # relies on wxlui set up to cat STDOUT
+            after = self._p.after.split('\n')
+            lines = [line for line in after if line.startswith('avm')]
+            print("LINES %s" % lines)
+            if any(lines):
+                mrs = lines[0]
+                break
+        # mrs == \avm <avm_ID> <MRS> "Simple MRS"\
         return mrs.split(None, 2)[2].rsplit('"', 2)[0]
 
-    def request_avm(self, tree_ID, edge_ID):
+    def _request_avm(self, tree_ID, edge_ID):
         self._browse(tree_ID, edge_ID, "avm")
-        return self._p.stdout.readline().rstrip()
+        return self._p.readline().rstrip()
+
+    def _no_parse(self, datum=""):
+        return "No parse found for {}.".format(datum)
+
+    def _raise_exception(self, datum=""):
+        exception = self._p.after
+        if isinstance(exception, BaseException):
+            raise exception()
+        raise Exception()
+
+    def close(self):
+        self._p.sendline('^C')
+        try:
+            self._p.close()
+        except:
+            pass
+        # Status will either be in 
+        # exit status (if normal) or signalstatus (if abnormal)
+        return self._p.exitstatus or self._p.signalstatus
     
     def __exit__(self, exc_type, exc_value, traceback):
         return False  # don't try to handle any exceptions
