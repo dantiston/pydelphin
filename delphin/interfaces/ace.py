@@ -59,7 +59,7 @@ class AceProcess(object):
         return retval
 
     def set_roots(roots):
-        if isinstance(roots, basestring):
+        if isinstance(roots, str):
             self.cmdargs.extend(['r', roots])
         else:
             self.cmdargs.extend(['r'].extend(roots))
@@ -143,7 +143,6 @@ class InteractiveAce(AceProcess):
     """
 
     def __init__(self, grm, cmdargs=None, executable=None):
-        #first_parse = True
 
         # CONDITIONS
         ## HEADER
@@ -152,16 +151,17 @@ class InteractiveAce(AceProcess):
         # 2: SKIP: -> no parses, return
         # 3: LUI: unknown X -> no parses, return
         # 4: <error> -> raise error
+        # 5: timeout -> raise error
         ## PARSES
         # 0: tree X -> Get the tree ID, top node ID, load tree into data, get MRS
         # 1: LUI: unknown X -> no parses, return
-        # 1: <error> -> raise error
+        # 2: EOF -> n parses, return
+        # 3: timeout -> raise error
         
-        
-        self.ace_parse_header_tags = [
-            r"parse .*\r\n", # 0
-            r"group .*\r\n", # 1
-            r"SKIP: .*\r\n", # 2
+        ace_parse_header_tags = [
+            r"parse .*?\r\n", # 0
+            r"group .*?\r\n", # 1
+            r"SKIP: .*?\r\n", # 2
             r"LUI: unknown .*\r\n", # 3
             pexpect.EOF, # 4
             pexpect.TIMEOUT, # 5
@@ -177,8 +177,8 @@ class InteractiveAce(AceProcess):
         }
 
         self.ace_result_tags = [
-            r"tree .*\r\n", # 0
-            r"LUI: unknown .*\r\n", # 1
+            r"tree .*?\r\n", # 0
+            r"LUI: unknown .*?\r\n", # 1
             pexpect.EOF, # 2
             pexpect.TIMEOUT, # 3
         ]
@@ -189,8 +189,15 @@ class InteractiveAce(AceProcess):
             2:self._no_parse,
             3:self._raise_exception, # TODO: Something different
         }
+
+        self.ace_parse_header_tags = []
+        for item in ace_parse_header_tags:
+            if isinstance(item, str):
+                self.ace_parse_header_tags.append(re.compile(item))
+            else:
+                self.ace_parse_header_tags.append(item)
                 
-        self.ace_header = re.compile(r"(parameter *\r\n)*ACE: reading input from LUI\r\n")
+        self.ace_header = re.compile(r"(parameter .*\r\n)*ACE: reading input from LUI\r\n")
 
         super().__init__(grm)
 
@@ -208,8 +215,8 @@ class InteractiveAce(AceProcess):
         ] + self.cmdargs
 
         self._p = pexpect.spawnu(self.executable, command)
-        #self._p.maxread = 4096
-        #self._p.searchwindowsize = 10240
+        self._p.maxread = 4096
+        self._p.searchwindowsize = 10240
         
         self.ace_result_tags = self._p.compile_pattern_list(self.ace_result_tags)
         
@@ -235,15 +242,12 @@ class InteractiveAce(AceProcess):
         self._p.expect(self.ace_header)
 
     def parse(self, datum):
+        if not datum.strip():
+            return {'SENT': "", 'RESULTS': []}
         self._send_parse(datum)
         return self._receive_parse(datum)
 
     def _send_parse(self, datum):
-        # NEWLINE VERY IMPORTANT
-        #self._p.stdin.write('parse %s^L\n' % datum.rstrip())
-        #self._p.stdin.write('%s\n' % datum.rstrip())
-        #self._p.stdin.flush()
-
         self._p.sendline('parse %s' % datum.rstrip())
 
     def _receive_parse(self, datum):
@@ -252,7 +256,7 @@ class InteractiveAce(AceProcess):
         self.blank = 0
 
         response = {
-            'SENT': None,
+            'SENT': datum.strip('"'),
             'RESULTS': []
         }
 
@@ -264,26 +268,23 @@ class InteractiveAce(AceProcess):
             self.ace_header_actions[ID](datum=datum)
 
         # Get all of the reported parses
-        """
-        TODO:
-            * Need to get SENT
-            * It regularly doesn't work. Increase wait time?
-        """
         parses = []
         for i in range(self.parse_count[datum]):
-            print("Getting parse {}".format(i))
-            ID = self._p.expect(self.ace_result_tags)
+            #print("Getting parse {}".format(i))
+            ID = self._p.expect(self.ace_result_tags, timeout=10)
+            #print("BEFORE:", self._p.before)
+            #print("MATCH:", self._p.match)
+            #print("AFTER:", self._p.after)
             parses.append(self.ace_result_actions[ID]())
 
         # Get the MRS for each of the reported parses
         for i in range(self.parse_count[datum]):
-            print("Getting mrs {}".format(i))
+            #print("Getting mrs {}".format(i))
             deriv_ID = parses[i][1]
             deriv = parses[i][2]
             top_edge_ID = deriv[len("#T["):].partition(' ')[0]
             # Get MRS
             mrs = self._request_mrs(deriv_ID, top_edge_ID)
-            print("GOT DERIV AND MRS")
             response['RESULTS'].append({
                 'MRS': mrs.strip(),
                 'DERIV': deriv.strip(),
@@ -321,14 +322,12 @@ class InteractiveAce(AceProcess):
         self._p.sendline('browse %s %s %s' % (tree_ID, edge_ID, what))
 
     def _request_mrs(self, tree_ID, edge_ID):
-        print("I got to InteractiveAce#_request_mrs()!")
         self._browse(tree_ID, edge_ID, "mrs simple")
         ID = -1
         while True:
             ID = self._p.expect(['browse .*\r\n', 'avm .*\r\n']) # relies on wxlui set up to cat STDOUT
             after = self._p.after.split('\n')
             lines = [line for line in after if line.startswith('avm')]
-            print("LINES %s" % lines)
             if any(lines):
                 mrs = lines[0]
                 break
@@ -340,13 +339,11 @@ class InteractiveAce(AceProcess):
         return self._p.readline().rstrip()
 
     def _no_parse(self, datum=""):
-        return "No parse found for {}.".format(datum)
+        return 0, "No parse found for {}.".format(datum)
 
     def _raise_exception(self, datum=""):
         exception = self._p.after
-        if isinstance(exception, BaseException):
-            raise exception()
-        raise Exception()
+        raise exception(str(self._p))
 
     def close(self):
         self._p.sendline('^C')
