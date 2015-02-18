@@ -281,7 +281,7 @@ class InteractiveAce(AceProcess):
         for i in range(self.parse_count[datum]):
             #print("Getting mrs {}".format(i))
             deriv_ID = parses[i][1]
-            deriv = parses[i][2]
+            deriv = parses[i][2].rsplit('"', 2)[0]
             top_edge_ID = deriv[len("#T["):].partition(' ')[0]
             # Get MRS
             mrs = self._request_mrs(deriv_ID, top_edge_ID)
