@@ -4,8 +4,12 @@
 import re
 import logging
 import os
-import pexpect
 from subprocess import (check_call, CalledProcessError, Popen, PIPE, STDOUT)
+
+# For InteractiveAce
+import pexpect
+from delphin.derivations.derivationtree import Derivation
+
 
 class AceProcess(object):
 
@@ -267,28 +271,33 @@ class InteractiveAce(AceProcess):
             ID = self._p.expect(self.ace_parse_header_tags)
             self.ace_header_actions[ID](datum=datum)
 
-        # Get all of the reported parses
-        parses = []
+        # Get parses and create Derivations
         for i in range(self.parse_count[datum]):
-            #print("Getting parse {}".format(i))
             ID = self._p.expect(self.ace_result_tags, timeout=10)
-            #print("BEFORE:", self._p.before)
-            #print("MATCH:", self._p.match)
-            #print("AFTER:", self._p.after)
-            parses.append(self.ace_result_actions[ID]())
+            response['RESULTS'].append(Derivation(self.ace_result_actions[ID]()))
+
+        # Get all of the reported parses
+        # parses = []
+        # for i in range(self.parse_count[datum]):
+        #     #print("Getting parse {}".format(i))
+        #     ID = self._p.expect(self.ace_result_tags, timeout=10)
+        #     #print("BEFORE:", self._p.before)
+        #     #print("MATCH:", self._p.match)
+        #     #print("AFTER:", self._p.after)
+        #     parses.append(self.ace_result_actions[ID]())
 
         # Get the MRS for each of the reported parses
-        for i in range(self.parse_count[datum]):
-            #print("Getting mrs {}".format(i))
-            deriv_ID = parses[i][1]
-            deriv = parses[i][2].rsplit('"', 2)[0]
-            top_edge_ID = deriv[len("#T["):].partition(' ')[0]
-            # Get MRS
-            mrs = self._request_mrs(deriv_ID, top_edge_ID)
-            response['RESULTS'].append({
-                'MRS': mrs.strip(),
-                'DERIV': deriv.strip(),
-            })
+        # for i in range(self.parse_count[datum]):
+        #     #print("Getting mrs {}".format(i))
+        #     deriv_ID = parses[i][1]
+        #     deriv = parses[i][2].rsplit('"', 2)[0]
+        #     top_edge_ID = deriv[len("#T["):].partition(' ')[0]
+        #     # Get MRS
+        #     mrs = self._request_mrs(deriv_ID, top_edge_ID)
+        #     response['RESULTS'].append({
+        #         'MRS': mrs.strip(),
+        #         'DERIV': deriv.strip(),
+        #     })
 
         return response
 
@@ -310,11 +319,10 @@ class InteractiveAce(AceProcess):
     def _extract_parse(self):
         """
         Expected format: 
-            \tree <tree_ID> #T[<top_edge_ID> "<label>" "<token>" <unk> <rule_name> (#T[.*])?] "<text>"\
+            \tree <tree_ID> #T[<edge_ID> "<label>" "<token>" <chart_ID> <rule_name> (#T[.*])?] "<text>"\
         """
 
-        match = self._p.after.split(None, 2)
-        return match
+        return self._p.after
 
     def _browse(self, tree_ID, edge_ID, what):
         #self._p.stdin.write('browse %s %s %s^L' % (tree_ID, edge_ID, what))
