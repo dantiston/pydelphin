@@ -276,29 +276,6 @@ class InteractiveAce(AceProcess):
             ID = self._p.expect(self.ace_result_tags, timeout=10)
             response['RESULTS'].append(Derivation(self.ace_result_actions[ID]()))
 
-        # Get all of the reported parses
-        # parses = []
-        # for i in range(self.parse_count[datum]):
-        #     #print("Getting parse {}".format(i))
-        #     ID = self._p.expect(self.ace_result_tags, timeout=10)
-        #     #print("BEFORE:", self._p.before)
-        #     #print("MATCH:", self._p.match)
-        #     #print("AFTER:", self._p.after)
-        #     parses.append(self.ace_result_actions[ID]())
-
-        # Get the MRS for each of the reported parses
-        # for i in range(self.parse_count[datum]):
-        #     #print("Getting mrs {}".format(i))
-        #     deriv_ID = parses[i][1]
-        #     deriv = parses[i][2].rsplit('"', 2)[0]
-        #     top_edge_ID = deriv[len("#T["):].partition(' ')[0]
-        #     # Get MRS
-        #     mrs = self._request_mrs(deriv_ID, top_edge_ID)
-        #     response['RESULTS'].append({
-        #         'MRS': mrs.strip(),
-        #         'DERIV': deriv.strip(),
-        #     })
-
         return response
 
     def _extract_parse_count(self, datum=""):
