@@ -1,7 +1,7 @@
 import unittest
 
 from delphin.interfaces.ace import InteractiveAce
-from delphin.derivations.derivationtree import Derivation
+from delphin.derivation import Derivation
 
 class TestAceParser(unittest.TestCase):
 
@@ -44,10 +44,28 @@ class TestInteractiveAce(unittest.TestCase):
         """
         TODO: 
             * Move result to external json file
-            * Make a comparable MRS object and compare
+            * Use simplemrs.py to compare Mrs
         """
         ace = TestInteractiveAce.ace
-        self.assertEqual(ace.parse("I run"), {'RESULTS': [Derivation('#T[1 "XP" nil 582 np_nb-frg_c #T[2 "N" nil 581 np-hdn_cpd_c #T[3 "NP" nil 578 hdn_bnp-pn_c #T[4 "N" "I" 64 i_pn_np1]] #T[5 "N" nil 580 hdn_optcmp_c #T[6 "N" nil 579 n_sg_ilr #T[7 "N" "run" 39 run_n1]]]]]')], 'SENT': 'I run'})
+        text = "I run"
+        result = ace.parse(text)
+        self.assertEqual(result['SENT'], text)
+        self.assertEqual(len(result['RESULTS']), 1)
+        self.assertEqual(Derivation(result['RESULTS'][0]), Derivation('#T[1 "XP" nil 582 np_nb-frg_c #T[2 "N" nil 581 np-hdn_cpd_c #T[3 "NP" nil 578 hdn_bnp-pn_c #T[4 "N" "I" 64 i_pn_np1]] #T[5 "N" nil 580 hdn_optcmp_c #T[6 "N" nil 579 n_sg_ilr #T[7 "N" "run" 39 run_n1]]]]]'))
+
+    def test_request_mrs(self):
+        pass
+
+    def test_request_avm(self):
+        pass
+
+    def test_parse_punctuation(self):
+        ace = TestInteractiveAce.ace
+        text = "Don't go"
+        result = ace.parse(text)
+        self.assertEqual(result['SENT'], text)
+        self.assertEqual(len(result['RESULTS']), 1)
+        self.assertEqual(Derivation(result['RESULTS'][0]), Derivation('#T[20 "XP" nil 569 vp_fin-frg_c #T[21 "VP" nil 568 hd-cmp_u_c #T[22 "V" "don’t" 81 do1_neg_4_u] #T[23 "VP" nil 567 hd_optcmp_c #T[24 "V" nil 566 v_n3s-bse_ilr #T[25 "V" "go" 38 go_v1]]]]]'))
 
     def test_parse_empty(self): 
         ace = TestInteractiveAce.ace
@@ -59,19 +77,22 @@ class TestInteractiveAce(unittest.TestCase):
         self.assertEqual(ace.parse(sent), {'SENT': sent, 'RESULTS': []})
 
     def test_parse_consistent(self):
-        """
-        Each parse increments an internal ACE counter,
-            so need to use a more robust comparison than strings
-        """
         ace = TestInteractiveAce.ace
         sent = "I run."
-        result = ace.parse(sent)
+        gold = ace.parse(sent)
+        gold_derivations = [Derivation(parse) for parse in gold['RESULTS']]
         for i in range(10):
-            self.assertEqual(ace.parse(sent), result)
+            result = ace.parse(sent)
+            self.assertEqual(result['SENT'], sent)
+            self.assertEqual(result['SENT'], gold['SENT'])
+            for i, parse in enumerate(result['RESULTS']):
+                self.assertEqual(Derivation(parse), gold_derivations[i])
 
+    @unittest.skip
     def test_send_parse(self):
         self.assertTrue(False)
 
+    @unittest.skip
     def test_receive_parse(self):
         self.assertTrue(False)
 

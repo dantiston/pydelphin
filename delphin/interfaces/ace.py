@@ -8,14 +8,14 @@ from subprocess import (check_call, CalledProcessError, Popen, PIPE, STDOUT)
 
 # For InteractiveAce
 import pexpect
-from delphin.derivations.derivationtree import Derivation
-
 
 class AceProcess(object):
 
     _cmdargs = []
 
     def __init__(self, grm, cmdargs=None, executable=None, **kwargs):
+        # Expand ~
+        grm = os.path.expanduser(grm)
         if not os.path.isfile(grm):
             raise ValueError("Grammar file %s does not exist." % grm)
         self.grm = grm
@@ -210,15 +210,17 @@ class InteractiveAce(AceProcess):
     
     def _open(self):
 
-        command = [
+        command = " ".join([
+            self.executable,
             '-l',
-            '--lui-fd=1',
+            '--lui-fd=3',
             '--input-from-lui',
             '-g',
             self.grm,
-        ] + self.cmdargs
+        ] + self.cmdargs + ["3<&0", "3>&1"])
 
-        self._p = pexpect.spawnu(self.executable, command)
+        # Spawning an instance of Bash enables the use of pipes
+        self._p = pexpect.spawnu("bash", ["-c", command])
         self._p.maxread = 4096
         self._p.searchwindowsize = 10240
         
@@ -274,7 +276,7 @@ class InteractiveAce(AceProcess):
         # Get parses and create Derivations
         for i in range(self.parse_count[datum]):
             ID = self._p.expect(self.ace_result_tags, timeout=10)
-            response['RESULTS'].append(Derivation(self.ace_result_actions[ID]()))
+            response['RESULTS'].append(self.ace_result_actions[ID]())
 
         return response
 
@@ -302,26 +304,25 @@ class InteractiveAce(AceProcess):
         return self._p.after
 
     def _browse(self, tree_ID, edge_ID, what):
-        #self._p.stdin.write('browse %s %s %s^L' % (tree_ID, edge_ID, what))
-        #self._p.stdin.flush()
-        self._p.sendline('browse %s %s %s' % (tree_ID, edge_ID, what))
-
-    def _request_mrs(self, tree_ID, edge_ID):
-        self._browse(tree_ID, edge_ID, "mrs simple")
+        self._p.sendline('browse %s %s %s\f' % (tree_ID, edge_ID, what))
         ID = -1
         while True:
             ID = self._p.expect(['browse .*\r\n', 'avm .*\r\n']) # relies on wxlui set up to cat STDOUT
-            after = self._p.after.split('\n')
-            lines = [line for line in after if line.startswith('avm')]
+            result = self._p.after.split('\n')
+            # TODO: Make this a generator?
+            lines = [line for line in result if line.startswith('avm')]
             if any(lines):
-                mrs = lines[0]
-                break
-        # mrs == \avm <avm_ID> <MRS> "Simple MRS"\
-        return mrs.split(None, 2)[2].rsplit('"', 2)[0]
+                return lines
 
-    def _request_avm(self, tree_ID, edge_ID):
-        self._browse(tree_ID, edge_ID, "avm")
-        return self._p.readline().rstrip()
+    def request_mrs(self, tree_ID, edge_ID):
+        mrs = self._browse(tree_ID, edge_ID, "mrs simple")
+        # mrs == ["avm <avm_ID> <MRS> \"Simple MRS\""]
+        return mrs[0].split(None, 2)[2].rsplit('"', 2)[0]
+
+    def request_avm(self, tree_ID, edge_ID):
+        result = self._browse(tree_ID, edge_ID, "avm")
+        # avm == [""]
+        return result[0]
 
     def _no_parse(self, datum=""):
         return 0, "No parse found for {}.".format(datum)
@@ -331,7 +332,7 @@ class InteractiveAce(AceProcess):
         raise exception(str(self._p))
 
     def close(self):
-        self._p.sendline('^C')
+        self._p.sendline(u"\u0003") # Send ^C
         try:
             self._p.close()
         except:
