@@ -199,13 +199,12 @@ class Derivation(object):
     def output_ACE(self):
         """
         Return ACE-like derivation string. Format:
-            #T[{EDGE_ID}{LABEL}{TOKEN}{CHART_ID}{RULE}{CHILDREN}]
-        
-        where values are joined by spaces.
+            #T[{EDGE_ID} {LABEL} {TOKEN} {CHART_ID} {RULE} {CHILDREN}]
         """
         return self._output(format_string="#T[{EDGE_ID}{LABEL}{TOKEN}{CHART_ID}{RULE}{CHILDREN}]")
 
     # HTML Methods
+    # TODO: Move to IGDE?
     def output_HTML(self, top=True, title_text=True):
         """
         Returns HTML representation of tree in the following format:

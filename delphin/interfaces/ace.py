@@ -273,7 +273,7 @@ class InteractiveAce(AceProcess):
             ID = self._p.expect(self.ace_parse_header_tags)
             self.ace_header_actions[ID](datum=datum)
 
-        # Get parses and create Derivations
+        # Get parses
         for i in range(self.parse_count[datum]):
             ID = self._p.expect(self.ace_result_tags, timeout=10)
             response['RESULTS'].append(self.ace_result_actions[ID]())

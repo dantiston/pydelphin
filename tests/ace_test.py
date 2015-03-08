@@ -40,10 +40,23 @@ class TestInteractiveAce(unittest.TestCase):
         self.assertEqual(ace._p.__class__, spawnu)
         self.assertEqual(ace._p.expect(""), 0) # Output should be empty
 
+
     def test_parse(self):
         """
         TODO: 
             * Move result to external json file
+        """
+        ace = TestInteractiveAce.ace
+        text = "I run"
+        result = ace.parse(text)
+        self.assertEqual(result['SENT'], text)
+        self.assertEqual(len(result['RESULTS']), 1)
+        self.assertEqual(Derivation(result['RESULTS'][0]), Derivation('#T[1 "XP" nil 582 np_nb-frg_c #T[2 "N" nil 581 np-hdn_cpd_c #T[3 "NP" nil 578 hdn_bnp-pn_c #T[4 "N" "I" 64 i_pn_np1]] #T[5 "N" nil 580 hdn_optcmp_c #T[6 "N" nil 579 n_sg_ilr #T[7 "N" "run" 39 run_n1]]]]]'))
+
+
+    def test_request_mrs(self):
+        """
+        TODO:
             * Use simplemrs.py to compare Mrs
         """
         ace = TestInteractiveAce.ace
@@ -53,11 +66,15 @@ class TestInteractiveAce(unittest.TestCase):
         self.assertEqual(len(result['RESULTS']), 1)
         self.assertEqual(Derivation(result['RESULTS'][0]), Derivation('#T[1 "XP" nil 582 np_nb-frg_c #T[2 "N" nil 581 np-hdn_cpd_c #T[3 "NP" nil 578 hdn_bnp-pn_c #T[4 "N" "I" 64 i_pn_np1]] #T[5 "N" nil 580 hdn_optcmp_c #T[6 "N" nil 579 n_sg_ilr #T[7 "N" "run" 39 run_n1]]]]]'))
 
-    def test_request_mrs(self):
-        pass
 
     def test_request_avm(self):
-        pass
+        ace = TestInteractiveAce.ace
+        text = "I run"
+        result = ace.parse(text)
+        self.assertEqual(result['SENT'], text)
+        self.assertEqual(len(result['RESULTS']), 1)
+        self.assertEqual(Derivation(result['RESULTS'][0]), Derivation('#T[1 "XP" nil 582 np_nb-frg_c #T[2 "N" nil 581 np-hdn_cpd_c #T[3 "NP" nil 578 hdn_bnp-pn_c #T[4 "N" "I" 64 i_pn_np1]] #T[5 "N" nil 580 hdn_optcmp_c #T[6 "N" nil 579 n_sg_ilr #T[7 "N" "run" 39 run_n1]]]]]'))
+
 
     def test_parse_punctuation(self):
         ace = TestInteractiveAce.ace
