@@ -1,63 +1,36 @@
 import re
 from collections import deque, defaultdict
 from itertools import chain
+
 from delphin._exceptions import TdlError, TdlParsingError
+from delphin.tfs import TypedFeatureStructure
 
 _list_head = 'FIRST'
 _list_tail = 'REST'
 _diff_list_list = 'LIST'
 _diff_list_last = 'LAST'
 
-class TdlDefinition(object):
 
-    __slots__ = ['supertypes', '_avm']
-
-    def __init__(self, supertypes=None, features=None):
+class TdlDefinition(TypedFeatureStructure):
+    """
+    A TdlDefinition is like a TypedFeatureStructure but each structure
+    may have a list of supertypes instead of a type. It also allows for
+    comments.
+    """
+    def __init__(self, supertypes=None, featvals=None, comment=None):
+        TypedFeatureStructure.__init__(self, None, featvals=featvals)
         self.supertypes = list(supertypes or [])
-        self._avm = {}
-        if isinstance(features, dict):
-            features = features.items()
-        for feat, val in list(features or []):
-            self[feat] = val
+        self.comment = comment
 
     def __repr__(self):
-        stlist = ' & '.join(self.supertypes)
-        return '<TdlDefinition object{} at {}>'.format(
-            '' if not self.supertypes else ' ({})'.format(stlist),
-            id(self)
-        )
+        return '<TdlDefinition object at {}>'.format(id(self))
 
-    def __setitem__(self, key, val):
-        try:
-            first, rest = key.split('.', 1)
-        except ValueError:
-            self._avm[key.upper()] = val
-        else:
-            first = first.upper()  # features are case-insensitive
-            try:
-                subdef = self._avm[first]
-            except KeyError:
-                subdef = self._avm.setdefault(first, TdlDefinition())
-            subdef[rest] = val
-
-    def __getitem__(self, key):
-        try:
-            first, rest = key.split('.', 1)
-        except ValueError:
-            return self._avm[key.upper()]
-        else:
-            return self._avm[first.upper()][rest]
-
-    def features(self):
-        for feat, val in self._avm.items():
-            try:
-                if val.supertypes or not val._avm:
-                    yield (feat, val)
-                else:
-                    for subfeat, subval in val.features():
-                        yield ('{}.{}'.format(feat, subfeat), subval)
-            except AttributeError:
-                yield (feat, val)
+    def _is_notable(self):
+        """
+        TdlDefinitions are notable if they define supertypes or have no
+        sub-features.
+        """
+        return bool(self.supertypes) or not self._avm
 
     def local_constraints(self):
         for feat, val in self._avm.items():
@@ -71,29 +44,28 @@ class TdlDefinition(object):
                 yield (feat, val)
 
 
-
 class TdlType(TdlDefinition):
-    def __init__(self, identifier, supertypes=None, features=None,
-                 coreferences=None, comment=None):
-        TdlDefinition.__init__(self, supertypes, features)
+    def __init__(self, identifier, definition, coreferences=None):
+        TdlDefinition.__init__(self, definition.supertypes,
+                               definition._avm.items(), definition.comment)
         self.identifier = identifier
+        self.definition = definition
         self.coreferences = list(coreferences or [])
-        self.comment = comment
-
-    @classmethod
-    def from_tdldef(cls, identifier, tdldef, coreferences=None, comment=None):
-        self = cls(identifier, coreferences=coreferences, comment=comment)
-        self._avm = tdldef._avm
-        self.supertypes = tdldef.supertypes
-        return self
 
     def __repr__(self):
-        stlist = ' & '.join(self.supertypes)
-        return "<TdlType object '{}'{} at {}>".format(
-            self.identifier,
-            '' if not self.supertypes else ' ({})'.format(stlist),
-            id(self)
+        return "<TdlType object '{}' at {}>".format(
+            self.identifier, id(self)
         )
+
+    # @property
+    # def supertypes(self):
+    #     return self.definition.supertypes
+
+    # @property
+    # def comment(self):
+    #     return self.definition.comment
+
+
 
 
 class TdlInflRule(TdlType):
@@ -181,7 +153,7 @@ def _nest_level(in_pattern, out_pattern, tokens):
     return sum(lookup.get(tok, 0) for tok in tokens)
 
 
-def parse(f):   
+def parse(f):
     for line_no, event, data in lex(f):
         data = deque(data)
         try:
@@ -201,7 +173,7 @@ def parse_typedef(tokens):
         identifier = tokens.popleft()
         assignment = tokens.popleft()
         affixes = parse_affixes(tokens)  # only for inflectional rules
-        tdldef, corefs, comment = parse_conjunction(tokens)
+        tdldef, corefs = parse_conjunction(tokens)
         # Now make coref paths a string instead of list
         corefs = _make_coreferences(corefs)
         #features = parse_conjunction(tokens)
@@ -209,9 +181,7 @@ def parse_typedef(tokens):
         # :+ doesn't need supertypes
         if assignment != ':+' and len(tdldef.supertypes) == 0:
             raise TdlParsingError('Type definition requires supertypes.')
-        t = TdlType.from_tdldef(
-            identifier, tdldef, coreferences=corefs, comment=comment
-        )
+        t = TdlType(identifier, tdldef, coreferences=corefs)
     except AssertionError as ex:
         msg = 'Remaining tokens: {}'.format(list(tokens))
         raise TdlParsingError(msg, identifier=identifier) from ex
@@ -282,9 +252,9 @@ def parse_conjunction(tokens):
     if features is None:
         tdldef = None
     else:
-        tdldef = TdlDefinition(supertypes, features)
+        tdldef = TdlDefinition(supertypes, features, comment=comment)
 
-    return tdldef, coreferences, comment
+    return tdldef, coreferences
 
 
 def parse_avm(tokens):
@@ -311,9 +281,9 @@ def parse_attr_val(tokens):
         tokens.popleft()
         path.append(tokens.popleft())
     path = '.'.join(path)  # put it back together (maybe shouldn'ta broke it)
-    value, corefs, comment = parse_conjunction(tokens)
+    value, corefs = parse_conjunction(tokens)
     corefs = [(c, [[path] + p for p in ps]) for c, ps in corefs]
-    return ((path, value), corefs)  # discard comment here, i guess
+    return ((path, value), corefs)
 
 
 def parse_cons_list(tokens):
@@ -324,7 +294,7 @@ def parse_cons_list(tokens):
         # do nothing (don't terminate the list)
     elif tokens[0] == '.':  # e.g. < a . #x >
         tokens.popleft()
-        tdldef, corefs, _ = parse_conjunction(tokens)
+        tdldef, corefs = parse_conjunction(tokens)
         feats.append((last_path, tdldef))
         corefs = [(c, [[last_path] + p for p in ps]) for c, ps in corefs]
         coreferences.extend(corefs)
@@ -359,7 +329,7 @@ def _parse_list(tokens, break_on):
     coreferences = []
     path = _list_head
     while tokens[0] not in break_on:
-        tdldef, corefs, _ = parse_conjunction(tokens)
+        tdldef, corefs = parse_conjunction(tokens)
         feats.append((path, tdldef))
         corefs = [(c, [[path] + p for p in ps]) for c, ps in corefs]
         coreferences.extend(corefs)
