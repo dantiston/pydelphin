@@ -38,7 +38,13 @@ Interface for interacting with a LUI protocol
 import re
 import pexpect
 
+from collections import defaultdict
+
+# PyDelphin imports
 from ..derivation import Derivation
+from ..tdl import tokenize as avm_tokenize
+from ..mrs.components import MrsVariable, Hook, ElementaryPredication, Argument
+from ..mrs.xmrs import Mrs
 
 # Utility Functions
 def _compile_tag_template(tag_template):
@@ -267,11 +273,11 @@ def receive_avm(parser):
 ### Derivation commands
 strip_quotes = re.compile("^[\'\"]|[\'\"]$")
 legal_punctuation = re.escape("'’-+=/:.!?$<>@#%^&*")
-lui_pattern = " ".join(("(?P<EDGE_ID>\d+)",
-                        "(?P<LABEL>{0}[\w{1}]+{0})",
-                        "(?P<TOKEN>({0}[\w{1}]+{0}|nil))",
-                        "(?P<CHART_ID>\d+)",
-                        "(?P<RULE_NAME>[\w{1}]+)",)).format("[\'\"]?", legal_punctuation)
+lui_derivation_pattern = " ".join(("(?P<EDGE_ID>\d+)",
+                                   "(?P<LABEL>{0}[\w{1}]+{0})",
+                                   "(?P<TOKEN>({0}[\w{1}]+{0}|nil))",
+                                   "(?P<CHART_ID>\d+)",
+                                   "(?P<RULE_NAME>[\w{1}]+)",)).format("[\'\"]?", legal_punctuation)
 
 def load_derivations(string):
     """
@@ -303,7 +309,7 @@ def load_derivations(string):
         bracket_patterns = '[%s%s]+' % (open_pattern, close_pattern)
         # Construct a regexp that will tokenize the string.
         token_re = re.compile('%s%s|%s|(%s)' % (
-            open_pattern, lui_pattern, close_pattern, valid_chars))
+            open_pattern, lui_derivation_pattern, close_pattern, valid_chars))
         # Walk through each token, updating a stack of trees.
         stack = [(None, [])] # list of (node, children) tuples
         tokens = list(token_re.finditer(s))
@@ -360,7 +366,102 @@ def load_avm():
     pass
 
 ## MRS
+_mrs_keys = ("TOP","LTOP","INDEX","RELS","XARG","ICONS","HCONS")
+_mrs_sorts = tuple("uipexh") # TODO: Get this from somewhere else?
 
+def _validate_sort(sort):
+    if sort not in _mrs_sorts:
+        raise ValueError("TOP value sort {!r} invalid at {}.load_mrs()".format(sort, __name__))
+
+### MRS Extraction methods
+def _extract_mrs_avm(tokens, brackets="[]"):
+    """
+    Extract a dictionary of constituent parts from a LUI-style MRS (AVM)
+    
+    Output:
+    {
+        "":[]
+        "":[]
+        "":[]
+        "":[]
+    }
+    """
+    # Extract AVM
+    depth = 0
+    entered = False
+    start = 0
+    open_b, close_b = brackets
+    result = defaultdict(dict)
+    for i, token in enumerate(tokens):
+        if token == open_b:
+            depth += 1
+            # Beginning of AVM
+            if not entered and depth == 1:
+                entered = True
+            # Start new AVM
+            elif depth == 2:
+                if i <= 0:
+                    raise ValueError("Something terribly bad happened at {}.load_mrs()".format(__name__))
+                # Go back through the last couple values and find key
+                for j in range(10):
+                    if tokens[i-j+1] == ">": # tokens[i-j] if a coref
+                        current_coref = tokens[i-j]
+                        found_coref = True
+                    if tokens[i-j] in _mrs_keys:
+                        current_key = tokens[i-j]
+                        break
+                start = i # keep track of start of AVM
+                if current_key not in _mrs_keys:
+                    raise ValueError("MRS has unrecognized key {!r} at {}.load_mrs()".format(current_key, __name__))
+        elif token == close_b:
+            depth -= 1
+            # End of AVM
+            if not entered and depth == 0:
+                raise ValueError("Expected a {open_b} but found a {close_b} at {name}.load_mrs()".format(open_b=open_b, close_b=close_b, name=__name__))
+            elif entered and depth == 0: # done!
+                break
+            # Capture current structure to data set
+            elif depth == 1: # was 2
+                if not current_key:
+                    raise ValueError("AVM closed without a valid key at {}.load_mrs()".format(__name__))
+                result[current_key]["value"] = tokens[start:i+1]
+                if found_coref:
+                    result[current_key]["id"] = current_coref
+            found_coref = False
+
+    return dict(result)
+
+def _extract_hook(result):
+    top, index, xarg = None, None, None
+    ## Get TOP
+    value = "TOP" if "TOP" in result else "LTOP"
+    if value in result:
+        sort = result[value]["value"][1]
+        _validate_sort(sort)
+        top = MrsVariable(vid=result[value]["id"], sort=sort)
+    ## Get INDEX
+    value = "INDEX"
+    if value in result:
+        sort = result[value]["value"][1]
+        _validate_sort(sort)
+        index = MrsVariable(vid=result[value]["id"], sort=sort)
+    ## Get XARG
+    value = "XARG"
+    if value in result:
+        sort = result[value]["value"][1]
+        _validate_sort(sort)
+        xarg = MrsVariable(vid=result[value]["id"], sort=sort)
+    ## Build Hook
+    return Hook(top=top, index=index, xarg=xarg)
+
+def _extract_rels(result):
+    pass
+
+def _extract_hcons(result):
+    pass
+
+def _extract_icons(result):
+    pass
 
 def load_mrs(mrs_string):
     # TODO: this
@@ -376,27 +477,19 @@ def load_mrs(mrs_string):
         ]
     """
 
-    # top_pattern = r"TOP: \<\d+\>=#D\[\w+\]"
-    # index_pattern = r"INDEX: \<\d+\>=#D\[.+\]"
-    # rels_pattern = r"RELS: #D\[.+\]"
-    # hcons_pattern = r"HCONS: #D\[.+\]"
-    # icons_pattern = r"ICONS: #D\[.+\]"
+    tokens = avm_tokenize(mrs_string)
+    result = _extract_mrs_avm(tokens)
 
-    actions = {
-        "TOP:":"",
-        "INDEX:":"",
-        "RELS:":"",
-        "HCONS:":"",
-        "ICONS:":"",
-    }
-
-    tokens = mrs_string.split()
-    for token in tokens:
-        if token in actions:
-            actions[token]()
-        
-
-    return Mrs(hook=Hook(ltop=ltop, index=index),
+    # Get HOOK
+    hook = _extract_hook(result)
+    # Get RELS
+    rels = _extract_rels(result)
+    # Get HCONS
+    hcons = _extract_hcons(result)
+    # Get ICONS (Planned feature)
+    icons = _extract_icons(result)
+    # Construct MRS
+    return Mrs(hook=hook,
                rels=rels,
                hcons=hcons,
                icons=icons)

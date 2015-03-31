@@ -7,7 +7,12 @@ from delphin.interfaces.ace import InteractiveAce
 
 # For testing equality
 from delphin.derivation import Derivation
-#from delphin.mrs import Mrs
+from delphin.mrs.xmrs import Mrs
+
+# For testing mrs/avm tokenization
+from delphin.tdl import tokenize as avm_tokenize
+from delphin.mrs.components import MrsVariable, HandleConstraint, ElementaryPredication, Pred, Argument, Hook
+
 
 class TestLui(unittest.TestCase):
     
@@ -16,6 +21,106 @@ class TestLui(unittest.TestCase):
         # TODO: Change path to a standardized path
         cls.parser = InteractiveAce("~/delphin/erg.dat")
         cls.text = "I run"
+
+        cls.gold_mrs_string = """avm 20 #D[mrs TOP: <0>=#D[h] INDEX: <2>=#D[e SF: "prop" TENSE: "pres" MOOD: "indicative" PROG: "-" PERF: "-"] RELS: #D[*cons* FIRST: #D[pron_rel LBL: <4>=#D[h] ARG0: <3>=#D[x PERS: "1" NUM: "sg" PRONTYPE: "std_pron"]] REST: #D[*cons* FIRST: #D[pronoun_q_rel LBL: <5>=#D[h] ARG0: <3>=#D[x PERS: "1" NUM: "sg" PRONTYPE: "std_pron"] RSTR: <6>=#D[h] BODY: <7>=#D[h]] REST: #D[*cons* FIRST: #D["_like_v_1_rel" LBL: <1>=#D[h] ARG0: <2>=#D[e SF: "prop" TENSE: "pres" MOOD: "indicative" PROG: "-" PERF: "-"] ARG1: <3>=#D[x PERS: "1" NUM: "sg" PRONTYPE: "std_pron"] ARG2: <8>=#D[x PERS: "3" NUM: "pl" IND: "+"]] REST: #D[*cons* FIRST: #D[udef_q_rel LBL: <9>=#D[h] ARG0: <8>=#D[x PERS: "3" NUM: "pl" IND: "+"] RSTR: <10>=#D[h] BODY: <11>=#D[h]] REST: #D[*cons* FIRST: #D["_dog_n_1_rel" LBL: <12>=#D[h] ARG0: <8>=#D[x PERS: "3" NUM: "pl" IND: "+"]] REST: #D[*null*] ] ] ] ] ] HCONS: #D[*cons* FIRST: #D[qeq HARG: <0>=#D[h] LARG: <1>=#D[h]] REST: #D[*cons* FIRST: #D[qeq HARG: <6>=#D[h] LARG: <4>=#D[h]] REST: #D[*cons* FIRST: #D[qeq HARG: <10>=#D[h] LARG: <12>=#D[h]] REST: #D[*null*] ] ] ]] "Simple MRS\""""
+        cls.gold_mrs_tokens = ['avm', '20', '#D', '[', 'mrs', 'TOP', ':', '<', '0', '>', '=', '#D', '[', 'h', ']', 'INDEX', ':', '<', '2', '>', '=', '#D', '[', 'e', 'SF', ':', '"prop"', 'TENSE', ':', '"pres"', 'MOOD', ':', '"indicative"', 'PROG', ':', '"-"', 'PERF', ':', '"-"', ']', 'RELS', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', 'pron_rel', 'LBL', ':', '<', '4', '>', '=', '#D', '[', 'h', ']', 'ARG0', ':', '<', '3', '>', '=', '#D', '[', 'x', 'PERS', ':', '"1"', 'NUM', ':', '"sg"', 'PRONTYPE', ':', '"std_pron"', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', 'pronoun_q_rel', 'LBL', ':', '<', '5', '>', '=', '#D', '[', 'h', ']', 'ARG0', ':', '<', '3', '>', '=', '#D', '[', 'x', 'PERS', ':', '"1"', 'NUM', ':', '"sg"', 'PRONTYPE', ':', '"std_pron"', ']', 'RSTR', ':', '<', '6', '>', '=', '#D', '[', 'h', ']', 'BODY', ':', '<', '7', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', '"_like_v_1_rel"', 'LBL', ':', '<', '1', '>', '=', '#D', '[', 'h', ']', 'ARG0', ':', '<', '2', '>', '=', '#D', '[', 'e', 'SF', ':', '"prop"', 'TENSE', ':', '"pres"', 'MOOD', ':', '"indicative"', 'PROG', ':', '"-"', 'PERF', ':', '"-"', ']', 'ARG1', ':', '<', '3', '>', '=', '#D', '[', 'x', 'PERS', ':', '"1"', 'NUM', ':', '"sg"', 'PRONTYPE', ':', '"std_pron"', ']', 'ARG2', ':', '<', '8', '>', '=', '#D', '[', 'x', 'PERS', ':', '"3"', 'NUM', ':', '"pl"', 'IND', ':', '"+"', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', 'udef_q_rel', 'LBL', ':', '<', '9', '>', '=', '#D', '[', 'h', ']', 'ARG0', ':', '<', '8', '>', '=', '#D', '[', 'x', 'PERS', ':', '"3"', 'NUM', ':', '"pl"', 'IND', ':', '"+"', ']', 'RSTR', ':', '<', '10', '>', '=', '#D', '[', 'h', ']', 'BODY', ':', '<', '11', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', '"_dog_n_1_rel"', 'LBL', ':', '<', '12', '>', '=', '#D', '[', 'h', ']', 'ARG0', ':', '<', '8', '>', '=', '#D', '[', 'x', 'PERS', ':', '"3"', 'NUM', ':', '"pl"', 'IND', ':', '"+"', ']', ']', 'REST', ':', '#D', '[', '*null*', ']', ']', ']', ']', ']', ']', 'HCONS', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', 'qeq', 'HARG', ':', '<', '0', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '1', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', 'qeq', 'HARG', ':', '<', '6', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '4', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', 'qeq', 'HARG', ':', '<', '10', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '12', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*null*', ']', ']', ']', ']', ']', '"Simple MRS"']
+        cls.gold_mrs_mapping = {
+            "TOP":{'value':
+                       ['[', 'h', ']'], 
+                   'id': '0'},
+
+            "INDEX":{'value':
+                         ['[', 'e', 'SF', ':', '"prop"', 'TENSE', ':', '"pres"', 'MOOD', ':', '"indicative"', 'PROG', ':', '"-"', 'PERF', ':', '"-"', ']'],
+                     'id': '2'},
+
+            "RELS":{'value':
+                        ['[', '*cons*', 'FIRST', ':', '#D', '[', 'pron_rel', 'LBL', ':', '<', '4', '>', '=', '#D', '[', 'h', ']', 'ARG0', ':', '<', '3', '>', '=', '#D', '[', 'x', 'PERS', ':', '"1"', 'NUM', ':', '"sg"', 'PRONTYPE', ':', '"std_pron"', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', 'pronoun_q_rel', 'LBL', ':', '<', '5', '>', '=', '#D', '[', 'h', ']', 'ARG0', ':', '<', '3', '>', '=', '#D', '[', 'x', 'PERS', ':', '"1"', 'NUM', ':', '"sg"', 'PRONTYPE', ':', '"std_pron"', ']', 'RSTR', ':', '<', '6', '>', '=', '#D', '[', 'h', ']', 'BODY', ':', '<', '7', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', '"_like_v_1_rel"', 'LBL', ':', '<', '1', '>', '=', '#D', '[', 'h', ']', 'ARG0', ':', '<', '2', '>', '=', '#D', '[', 'e', 'SF', ':', '"prop"', 'TENSE', ':', '"pres"', 'MOOD', ':', '"indicative"', 'PROG', ':', '"-"', 'PERF', ':', '"-"', ']', 'ARG1', ':', '<', '3', '>', '=', '#D', '[', 'x', 'PERS', ':', '"1"', 'NUM', ':', '"sg"', 'PRONTYPE', ':', '"std_pron"', ']', 'ARG2', ':', '<', '8', '>', '=', '#D', '[', 'x', 'PERS', ':', '"3"', 'NUM', ':', '"pl"', 'IND', ':', '"+"', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', 'udef_q_rel', 'LBL', ':', '<', '9', '>', '=', '#D', '[', 'h', ']', 'ARG0', ':', '<', '8', '>', '=', '#D', '[', 'x', 'PERS', ':', '"3"', 'NUM', ':', '"pl"', 'IND', ':', '"+"', ']', 'RSTR', ':', '<', '10', '>', '=', '#D', '[', 'h', ']', 'BODY', ':', '<', '11', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', '"_dog_n_1_rel"', 'LBL', ':', '<', '12', '>', '=', '#D', '[', 'h', ']', 'ARG0', ':', '<', '8', '>', '=', '#D', '[', 'x', 'PERS', ':', '"3"', 'NUM', ':', '"pl"', 'IND', ':', '"+"', ']', ']', 'REST', ':', '#D', '[', '*null*', ']', ']', ']', ']', ']', ']']},
+
+            "HCONS":{'value':
+                         ['[', '*cons*', 'FIRST', ':', '#D', '[', 'qeq', 'HARG', ':', '<', '0', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '1', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', 'qeq', 'HARG', ':', '<', '6', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '4', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', 'qeq', 'HARG', ':', '<', '10', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '12', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*null*', ']', ']', ']', ']']},
+        }
+
+        # Build gold MRS
+        ## Handles
+        handles = [MrsVariable(vid=i, sort='h') for i in range(0,13)]
+        ## Top
+        top = MrsVariable(vid=0, sort='h')
+        ## Arguments
+        ### Pronoun x argument
+        pron_arg_properties = {
+            "PERS":"1",
+            "NUM":"sg",
+            "PRONTYPE":"std_pron",
+        }
+        pron_arg = MrsVariable(vid=3, sort="x", properties=pron_arg_properties)
+        ### Like e argument
+        like_arg_properties = {
+            "SF":"prop",
+            "TENSE":"pres",
+            "MOOD":"indicative",
+            "PROG":"-",
+            "PERF":"-",
+        }
+        like_arg = MrsVariable(vid=2, sort="e", properties=like_arg_properties)
+        ### Dogs x argument
+        dogs_arg_properties = {
+            "PERS":"3",
+            "NUM":"pl",
+            "IND":"+",
+        }
+        dogs_arg = MrsVariable(vid=12, sort="h", properties=dogs_arg_properties)
+        ## RELS
+        cls.rels = (
+            # "I" relation
+            ElementaryPredication(
+                Pred.stringpred('pron_rel'),
+                label=MrsVariable(vid=4, sort="h"),
+                args=(Argument.mrs_argument('ARG0', pron_arg),)
+            ),
+            # PRON_Q relation # TODO: THIS
+            ElementaryPredication(
+                Pred.stringpred('pronoun_q_rel'),
+                label=MrsVariable(vid=5, sort="h"),
+                args=(Argument.mrs_argument('ARG0', pron_arg),
+                      Argument.mrs_argument('RSTR', handles[6]),
+                      Argument.mrs_argument('BODY', handles[7]))
+            ),
+            # "like" relation
+            ElementaryPredication(
+                Pred.stringpred('_like_v_1_rel'),
+                label=MrsVariable(vid=1, sort="h"),
+                args=(Argument.mrs_argument('ARG0', like_arg),
+                      Argument.mrs_argument('ARG1', pron_arg),
+                      Argument.mrs_argument('ARG2', dogs_arg),)
+            ),
+            # "dogs" relation
+            ElementaryPredication(
+                Pred.stringpred('_dog_n_1_rel'),
+                label=MrsVariable(vid=12, sort="h"),
+                args=(Argument.mrs_argument('ARG0', dogs_arg),)
+            ),
+            # UDEF_Q relation # TODO: THIS
+            ElementaryPredication(
+                Pred.stringpred('udef_q_rel'),
+                label=MrsVariable(vid=9, sort="h"),
+                args=(Argument.mrs_argument('ARG0', dogs_arg),
+                      Argument.mrs_argument('RSTR', handles[10]),
+                      Argument.mrs_argument('BODY', handles[11]))
+            ),
+        )
+        ## HCONS
+        cls.hcons = (
+            HandleConstraint.qeq(handles[0], handles[1]),
+            HandleConstraint.qeq(handles[6], handles[4]),
+            HandleConstraint.qeq(handles[10], handles[12]),
+        )
+        ## HOOK
+        cls.hook = Hook(top=top, index=like_arg)
+        # Build gold Mrs
+        cls.goldMrs = Mrs(hook=cls.hook,
+                          rels=cls.rels,
+                          hcons=cls.hcons)
+
 
     def setUp(self):
         self.parser = InteractiveAce("~/delphin/erg.dat")
@@ -114,14 +219,51 @@ tree 1 #T[11 "XP" nil 836 np_frg_c #T[12 "NP" nil 835 hdn_bnp_c #T[13 "N" nil 83
     def testLoadAVM(self):
         pass
 
+
     def testLoadMRS(self):
-        pass
+        # MRS for "I like dogs." from ERG 1212
+        result = lui.load_mrs(__class__.gold_mrs_string)
+        # Compare!
+        self.assertEqual(__class__.goldMrs, result)
+
+
+    def testExtractMrsAvm(self):
+        result = lui._extract_mrs_avm(__class__.gold_mrs_tokens)
+        self.assertEqual(__class__.gold_mrs_mapping, result)
+
+
+    def testExtractHook(self):
+        result = lui._extract_hook(__class__.gold_mrs_mapping)
+        print("GOLD: {}".format(__class__.hook))
+        print("SYSTEM: {}".format(result))
+        self.assertEqual(__class__.hook, result)
+
+
+    def testExtractRels(self):
+        result = lui._extract_rels(__class__.gold_mrs_mapping)
+
+
+    def testExtractHCONS(self):
+        result = lui._extract_hcons(__class__.gold_mrs_mapping)
+
+
+    @unittest.skip
+    def testExtractICONS(self):
+        result = lui._extract_icons(__class__._gold_mrs_mapping)
+
+
+    def testTokenizeMrs(self):
+        result = avm_tokenize(__class__.gold_mrs_string)
+        self.assertEqual(__class__.gold_mrs_tokens, result)
+
 
     def testDumpTree(self):
         pass
 
+
     def testDumpAVM(self):
         pass
+
 
     def testDumpMRS(self):
         pass
