@@ -68,7 +68,7 @@ class TestLui(unittest.TestCase):
             "NUM":"pl",
             "IND":"+",
         }
-        dogs_arg = MrsVariable(vid=12, sort="h", properties=dogs_arg_properties)
+        dogs_arg = MrsVariable(vid=8, sort="x", properties=dogs_arg_properties)
         ## RELS
         cls.rels = (
             # "I" relation
@@ -77,7 +77,7 @@ class TestLui(unittest.TestCase):
                 label=MrsVariable(vid=4, sort="h"),
                 args=(Argument.mrs_argument('ARG0', pron_arg),)
             ),
-            # PRON_Q relation # TODO: THIS
+            # PRON_Q relation
             ElementaryPredication(
                 Pred.stringpred('pronoun_q_rel'),
                 label=MrsVariable(vid=5, sort="h"),
@@ -87,7 +87,7 @@ class TestLui(unittest.TestCase):
             ),
             # "like" relation
             ElementaryPredication(
-                Pred.stringpred('_like_v_1_rel'),
+                Pred.stringpred('"_like_v_1_rel"'),
                 label=MrsVariable(vid=1, sort="h"),
                 args=(Argument.mrs_argument('ARG0', like_arg),
                       Argument.mrs_argument('ARG1', pron_arg),
@@ -95,11 +95,11 @@ class TestLui(unittest.TestCase):
             ),
             # "dogs" relation
             ElementaryPredication(
-                Pred.stringpred('_dog_n_1_rel'),
+                Pred.stringpred('"_dog_n_1_rel"'),
                 label=MrsVariable(vid=12, sort="h"),
                 args=(Argument.mrs_argument('ARG0', dogs_arg),)
             ),
-            # UDEF_Q relation # TODO: THIS
+            # UDEF_Q relation
             ElementaryPredication(
                 Pred.stringpred('udef_q_rel'),
                 label=MrsVariable(vid=9, sort="h"),
@@ -126,6 +126,7 @@ class TestLui(unittest.TestCase):
         self.parser = InteractiveAce("~/delphin/erg.dat")
         self.text = "I run"
 
+
     # Basic tests
     def testParse(self):
         """
@@ -137,15 +138,18 @@ class TestLui(unittest.TestCase):
         self.assertEqual(len(result['RESULTS']), 1)
         self.assertEqual(Derivation(result['RESULTS'][0]), Derivation('#T[1 "XP" nil 582 np_nb-frg_c #T[2 "N" nil 581 np-hdn_cpd_c #T[3 "NP" nil 578 hdn_bnp-pn_c #T[4 "N" "I" 64 i_pn_np1]] #T[5 "N" nil 580 hdn_optcmp_c #T[6 "N" nil 579 n_sg_ilr #T[7 "N" "run" 39 run_n1]]]]]'))
 
+
     @unittest.skip
     def testGenerate(self):
         self.fail("Need to implement Generate()!")
+
 
     # Request tests
     def testRequestParse(self):
         lui.request_parse(__class__.parser, __class__.text)
         expectation = [re.compile(r"parse .*?\r\n")]
         self.assertEqual(__class__.parser._p.expect(expectation), 0)
+
 
     def testRequestMRS(self):
         datum = "I like dogs."
@@ -157,6 +161,7 @@ class TestLui(unittest.TestCase):
         expectation = [re.compile(r"avm .*?\r\n")]
         self.assertEqual(self.parser._p.expect(expectation), 0)
 
+
     @unittest.skip
     def testRequestAVM(self):
         self.parser._p.sendline("parse I like dogs.\f")
@@ -164,13 +169,16 @@ class TestLui(unittest.TestCase):
         expectation = [re.compile(r"avm .*?\r\n")]
         self.assertEqual(self.parser._p.expect(expectation), 0)
 
+
     @unittest.skip
     def testRequestGenerate(self):
         self.fail("Need to implement Generate()!")
 
+
     @unittest.skip
     def testRequestUnify(self):
         self.fail("Need to implement Unify()!")
+
 
     # Receive tests
     def testReceiveDerivations(self):
@@ -179,6 +187,7 @@ class TestLui(unittest.TestCase):
         response = lui.receive_derivations(__class__.parser, target)
         self.assertEqual(response['SENT'], target)
         self.assertEqual(len(response['RESULTS']), 2)
+
 
     def testReceiveMRS(self):
         datum = "I like dogs."
@@ -194,13 +203,16 @@ class TestLui(unittest.TestCase):
         self.assertEqual(tag, "avm")
         self.assertEqual(sort, "Simple MRS")
 
+
     def testReceiveAVM(self):
         pass
+
 
     def testReceiveSentences(self):
         pass
 
-    # Load/Dump tests
+
+    # Load tests
     def testLoadDerivationsList(self):
         result = lui.load_derivations("""tree 1 #T[1 "S" nil 843 sb-hd_mc_c #T[2 "NP" nil 837 hdn_bnp-qnt_c #T[3 "NP" "I" 85 i]] #T[4 "VP" nil 842 hd-cmp_u_c #T[5 "V" nil 838 v_n3s-bse_ilr #T[6 "V" "like" 56 like_v1]] #T[7 "NP" nil 841 hdn_bnp_c #T[8 "N" nil 840 w_period_plr #T[9 "N" nil 839 n_pl_olr #T[10 "N" "dogs." 62 dog_n1]]]]]] "I like dogs."
 
@@ -209,6 +221,7 @@ tree 1 #T[11 "XP" nil 836 np_frg_c #T[12 "NP" nil 835 hdn_bnp_c #T[13 "N" nil 83
         self.assertTrue(all(isinstance(tree, Derivation) for tree in result))
         # TODO: Test the trees against stored json
 
+
     def testLoadDerivations(self):
         result = lui.load_derivations("""tree 1 #T[1 "S" nil 843 sb-hd_mc_c #T[2 "NP" nil 837 hdn_bnp-qnt_c #T[3 "NP" "I" 85 i]] #T[4 "VP" nil 842 hd-cmp_u_c #T[5 "V" nil 838 v_n3s-bse_ilr #T[6 "V" "like" 56 like_v1]] #T[7 "NP" nil 841 hdn_bnp_c #T[8 "N" nil 840 w_period_plr #T[9 "N" nil 839 n_pl_olr #T[10 "N" "dogs." 62 dog_n1]]]]]] "I like dogs.\"""")
         self.assertEqual(len(result), 1)
@@ -216,16 +229,44 @@ tree 1 #T[11 "XP" nil 836 np_frg_c #T[12 "NP" nil 835 hdn_bnp_c #T[13 "N" nil 83
         # TODO: Test the trees against stored json
 
 
+    ## AVM Tests
     def testLoadAVM(self):
         pass
 
 
-    def testLoadMRS(self):
+    def testExtractAvmList(self):
+        result = lui._extract_avm_list(['[', '*cons*', 'FIRST', ':', '#D', '[', 'qeq', 'HARG', ':', '<', '0', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '1', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', 'qeq', 'HARG', ':', '<', '6', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '4', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*null*', ']', ']', ']', ']'])
+
+        target = [['#D', '[', 'qeq', 'HARG', ':', '<', '0', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '1', '>', '=', '#D', '[', 'h', ']', ']'],
+                  ['#D', '[', 'qeq', 'HARG', ':', '<', '6', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '4', '>', '=', '#D', '[', 'h', ']', ']'],]
+
+        self.assertEqual(result, target)
+
+
+    ## MRS Tests
+    def testLoadMrs(self):
         # MRS for "I like dogs." from ERG 1212
         result = lui.load_mrs(__class__.gold_mrs_string)
-        # Compare!
-        self.assertEqual(__class__.goldMrs, result)
+        
+        ### START DELETEME
+        # print("Hook equal {}".format(result.hook == __class__.goldMrs.hook))
+        # print("Length of eps equal {}".format(len(result.eps) == len(__class__.goldMrs.eps)))
+        # zipped_eps = zip(sorted(result.eps), sorted(__class__.goldMrs.eps))
+        # for ep1, ep2 in zipped_eps:
+        #     print(ep1)
+        #     print(ep2)
+        #     print(ep1 == ep2)
+        #     print("Labels equal: {}".format(ep1.label == ep2.label))
+        #     print("Argdicts equal: {}".format(ep1.argdict == ep2.argdict))
+        #     print("Nodes equal: {}".format(ep1._node == ep2._node))
+        #     print("Nodes: {} {}".format(ep1._node, ep2._node))
+        #     print()
+        #print("Hook equal {}".format(result.hook == __class__.goldMrs.hook))
 
+        ### END DELETEME
+
+        #self.assertEqual(__class__.goldMrs, result)
+        self.assertTrue(__class__.goldMrs.pseudoequals(result))
 
     def testExtractMrsAvm(self):
         result = lui._extract_mrs_avm(__class__.gold_mrs_tokens)
@@ -234,22 +275,32 @@ tree 1 #T[11 "XP" nil 836 np_frg_c #T[12 "NP" nil 835 hdn_bnp_c #T[13 "N" nil 83
 
     def testExtractHook(self):
         result = lui._extract_hook(__class__.gold_mrs_mapping)
-        print("GOLD: {}".format(__class__.hook))
-        print("SYSTEM: {}".format(result))
         self.assertEqual(__class__.hook, result)
 
 
     def testExtractRels(self):
+        """
+        The ElementaryPredication __eq__ method compares the nodeids, which
+        are assigned to each ElementaryPredication during the construction of
+        an MRS object, as in the setup. Therefore, this tests for equality
+        of the label and argdicts of each ElementaryPredication in the list,
+        as opposed to using their __eq__ method.
+        """
         result = lui._extract_rels(__class__.gold_mrs_mapping)
+        for rel in zip(sorted(__class__.rels), sorted(result)):
+            self.assertEqual(rel[0].label, rel[0].label)
+            self.assertEqual(rel[0].argdict, rel[0].argdict)
 
 
     def testExtractHCONS(self):
         result = lui._extract_hcons(__class__.gold_mrs_mapping)
+        self.assertEqual(__class__.hcons, tuple(result))
 
 
     @unittest.skip
     def testExtractICONS(self):
         result = lui._extract_icons(__class__._gold_mrs_mapping)
+        self.assertEqual(__class__.icons, tuple(result))
 
 
     def testTokenizeMrs(self):
@@ -257,6 +308,7 @@ tree 1 #T[11 "XP" nil 836 np_frg_c #T[12 "NP" nil 835 hdn_bnp_c #T[13 "N" nil 83
         self.assertEqual(__class__.gold_mrs_tokens, result)
 
 
+    # Dump tests
     def testDumpTree(self):
         pass
 

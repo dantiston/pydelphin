@@ -864,6 +864,10 @@ class ElementaryPredication(LnkMixin, AnchorMixin):
         except AttributeError:
             return False  # comparing EP to non-EP means EP is greater?
 
+    def pseudoequals(self, other):
+        return (self.label == other.label and 
+                self.argdict == other.argdict)
+
     # these properties provide an interface to the node attributes
 
     @property

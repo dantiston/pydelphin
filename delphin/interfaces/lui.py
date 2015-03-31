@@ -41,10 +41,12 @@ import pexpect
 from collections import defaultdict
 
 # PyDelphin imports
+## Data structures
 from ..derivation import Derivation
-from ..tdl import tokenize as avm_tokenize
-from ..mrs.components import MrsVariable, Hook, ElementaryPredication, Argument
 from ..mrs.xmrs import Mrs
+from ..mrs.components import MrsVariable, HandleConstraint, ElementaryPredication, Pred, Argument, Hook
+## Methods
+from ..tdl import tokenize as avm_tokenize
 
 # Utility Functions
 def _compile_tag_template(tag_template):
@@ -366,32 +368,41 @@ def load_avm():
     pass
 
 ## MRS
-_mrs_keys = ("TOP","LTOP","INDEX","RELS","XARG","ICONS","HCONS")
 _mrs_sorts = tuple("uipexh") # TODO: Get this from somewhere else?
 
-def _validate_sort(sort):
+def _validate_sort(sort, method_name="load_mrs"):
     if sort not in _mrs_sorts:
-        raise ValueError("TOP value sort {!r} invalid at {}.load_mrs()".format(sort, __name__))
+        raise ValueError("Sort value {!r} invalid at {}.{}()".format(sort, __name__, method_name))
 
 ### MRS Extraction methods
-def _extract_mrs_avm(tokens, brackets="[]"):
+def _extract_mrs_avm(tokens, brackets="[]", keys=("TOP","LTOP","INDEX","RELS","XARG","ICONS","HCONS")):
     """
-    Extract a dictionary of constituent parts from a LUI-style MRS (AVM)
+    Extract a dictionary of constituent tokens from a LUI-style MRS (AVM)
     
-    Output:
+    Output (e.g.):
     {
-        "":[]
-        "":[]
-        "":[]
-        "":[]
+        "TOP":{'value':[...], 'id': 0}
+        "INDEX":{'value':[...], 'id': 0}
+        "RELS":{'value':[...]}
+        "HCONS":{'value':[...]}
     }
+
+    kwargs:
+        brackets: 
     """
+    # Verify parameters
+    if len(brackets) != 2:
+        raise ValueError("{}._extract_mrs_avm() brackets parameter should be length of 2".format(__class__))
+    if len(keys) < 1:
+        raise ValueError("{}._extract_mrs_avm() keys parameter should be an iterable of length at least 1".format(__class__))
     # Extract AVM
     depth = 0
     entered = False
     start = 0
     open_b, close_b = brackets
+    coref_open_b, coref_close_b = "<>" # TODO: change this?
     result = defaultdict(dict)
+    current_key = None
     for i, token in enumerate(tokens):
         if token == open_b:
             depth += 1
@@ -404,14 +415,14 @@ def _extract_mrs_avm(tokens, brackets="[]"):
                     raise ValueError("Something terribly bad happened at {}.load_mrs()".format(__name__))
                 # Go back through the last couple values and find key
                 for j in range(10):
-                    if tokens[i-j+1] == ">": # tokens[i-j] if a coref
+                    if tokens[i-j+1] == coref_close_b: # tokens[i-j] if a coref
                         current_coref = tokens[i-j]
                         found_coref = True
-                    if tokens[i-j] in _mrs_keys:
+                    if tokens[i-j] in keys:
                         current_key = tokens[i-j]
                         break
                 start = i # keep track of start of AVM
-                if current_key not in _mrs_keys:
+                if current_key not in keys:
                     raise ValueError("MRS has unrecognized key {!r} at {}.load_mrs()".format(current_key, __name__))
         elif token == close_b:
             depth -= 1
@@ -429,39 +440,139 @@ def _extract_mrs_avm(tokens, brackets="[]"):
                     result[current_key]["id"] = current_coref
             found_coref = False
 
-    return dict(result)
+    return dict(result) # Convert from defaultdict to dict
 
+def _extract_avm_list(tokens):
+    """
+    Converts tokenized AVM-style recursive list to flat python list of AVMs.
+
+    Note that this removes the null REST at the end. Therefore:
+        len(input) == len(output)+1
+
+    Format:
+        [ *cons* FIRST : #D [ qeq HARG : < 0 > = #D [ h ] LARG : < 1 > = #D [ h ] ] REST : #D [ *cons* FIRST : #D [ qeq HARG : < 6 > = #D [ h ] LARG : < 4 > = #D [ h ] ] REST : #D [ *null* ] ] ] ]
+    """
+    first, rest = "FIRST", "REST"
+    start = 0
+    result = []
+    for i, token in enumerate(tokens):
+        if token == first:
+            i3 = i+3
+            if i3 <= len(tokens) and tokens[i3] == "[":
+                start = i3-1 # Get the #D
+            else:
+                raise ValueError("{}._extract_avm_list() received an invalid AVM with FIRST not preceding an AVM (expected '[', found {} instead)".format(__name__, tokens[i3]))
+        elif token == rest:
+            result.append(tokens[start:i])
+    return result
+
+
+## Extract MRS components
 def _extract_hook(result):
     top, index, xarg = None, None, None
     ## Get TOP
-    value = "TOP" if "TOP" in result else "LTOP"
-    if value in result:
-        sort = result[value]["value"][1]
+    key = "TOP" if "TOP" in result else "LTOP"
+    if key in result:
+        sort = result[key]["value"][1]
         _validate_sort(sort)
-        top = MrsVariable(vid=result[value]["id"], sort=sort)
+        top = MrsVariable(vid=result[key]["id"], sort=sort)
     ## Get INDEX
-    value = "INDEX"
-    if value in result:
-        sort = result[value]["value"][1]
+    key = "INDEX"
+    if key in result:
+        sort = result[key]["value"][1]
         _validate_sort(sort)
-        index = MrsVariable(vid=result[value]["id"], sort=sort)
+        index = MrsVariable(vid=result[key]["id"], sort=sort)
     ## Get XARG
-    value = "XARG"
-    if value in result:
-        sort = result[value]["value"][1]
+    key = "XARG"
+    if key in result:
+        sort = result[key]["value"][1]
         _validate_sort(sort)
-        xarg = MrsVariable(vid=result[value]["id"], sort=sort)
+        xarg = MrsVariable(vid=result[key]["id"], sort=sort)
     ## Build Hook
     return Hook(top=top, index=index, xarg=xarg)
 
-def _extract_rels(result):
-    pass
+def _extract_rels(result_map):
+    """
+    Extract the relations from a given LUI string
 
-def _extract_hcons(result):
-    pass
+    TODO: Break this into constituent functions
+    """
+    key = "RELS"
+    distance_from_key_to_vid = 3
+    distance_from_key_to_sort = 8
+    distance_from_key_to_properties = 9
+    distance_from_key_to_next = 10
+    result = []
+    if key in result_map:
+        rels = _extract_avm_list(result_map[key]['value'])
+        for rel in rels:
+            # Validate relation
+            if len(rel) < 3:
+                raise ValueError("{}._extract_rels() given empty tokens")
+            # Well-formed LUI #D structures will have their pred at position 2
+            predicate = Pred.stringpred(rel[2])
+            # Gather the rest of the values
+            i = 3
+            args = []
+            while i < len(rel[3:])-1: # Nothing interesting exists at the last slot
+                token = rel[i]
+                if token == "LBL":
+                    sort = rel[i+distance_from_key_to_sort]
+                    _validate_sort(sort)
+                    label = MrsVariable(vid=rel[i+distance_from_key_to_vid], sort=sort)
+                    i += distance_from_key_to_next # Skip ahead
+                elif token.startswith("ARG"):
+                    # Get properties
+                    properties = {}
+                    search_space = rel[i+distance_from_key_to_properties:]
+                    for j, item in enumerate(search_space): # 9 tokens before properties
+                        if item == ":":
+                            key = search_space[j-1]
+                            value = search_space[j+1]
+                            properties[key] = value
+                        if item == "]":
+                            break
+                    # Build argument
+                    sort = rel[i+distance_from_key_to_sort]
+                    _validate_sort(sort)
+                    argument = MrsVariable(vid=rel[i+distance_from_key_to_vid], sort=sort, properties=properties)
+                    args.append(Argument.mrs_argument(token, argument))
+                    i += distance_from_key_to_properties+j # Jump ahead!
+                elif token in ("RSTR","BODY"):
+                    sort = rel[i+distance_from_key_to_sort]
+                    _validate_sort(sort)
+                    args.append(Argument.mrs_argument(token, MrsVariable(vid=rel[i+distance_from_key_to_vid], sort=sort)))
+                    i += distance_from_key_to_next
+                elif rel[i+1] == ":": # If this is a key and it's not one of the above... freak out!
+                    raise ValueError("{}._extract_rels() doesn't know what to do with key {}".format(__name__, token))
+                else: # TODO: Do we actually want this?
+                    i += 1
+            # Validate predicate
+            if not args or not label: # TODO: make better errors
+                raise ValueError("{}._extract_rels() found an invalid elementary predication: {}".format(__name__, " ".join(rel)))
+            # Build the predicate
+            result.append(ElementaryPredication(predicate, label=label, args=args))
+    return result
 
-def _extract_icons(result):
-    pass
+def _extract_hcons(result_map):
+    key = "HCONS"
+    result = []
+    distance_from_key_to_tag = 3
+    if key in result_map:
+        values = _extract_avm_list(result_map[key]['value'])
+        for handle in values:
+            for i, token in enumerate(handle):
+                if token == "HARG":
+                    hiID = handle[i+distance_from_key_to_tag]
+                elif token == "LARG":
+                    loID = handle[i+distance_from_key_to_tag]
+            hi = MrsVariable(vid=hiID, sort='h')
+            lo = MrsVariable(vid=loID, sort='h')
+            result.append(HandleConstraint.qeq(hi, lo))
+    return result
+
+def _extract_icons(result_map):
+    return None
 
 def load_mrs(mrs_string):
     # TODO: this
