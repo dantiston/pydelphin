@@ -477,8 +477,8 @@ class Link(object):
         self.post = post
 
     def __repr__(self):
-        return '<Link object (#{} :{}/{}> #{}) at {}>'.format(
-            self.start, self.argname or '', self.post, self.end, id(self)
+        return '<Link object ({}:{}/{} -> {}) at {}>'.format(
+            self.start, self.argname, self.post, self.end, id(self)
         )
 
 
@@ -863,10 +863,6 @@ class ElementaryPredication(LnkMixin, AnchorMixin):
             return self._node < other._node
         except AttributeError:
             return False  # comparing EP to non-EP means EP is greater?
-
-    def pseudoequals(self, other):
-        return (self.label == other.label and 
-                self.argdict == other.argdict)
 
     # these properties provide an interface to the node attributes
 

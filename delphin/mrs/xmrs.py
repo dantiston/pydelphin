@@ -38,6 +38,7 @@ def Mrs(hook=None, rels=None, hcons=None, icons=None,
         An |Xmrs| object
 
     Example:
+
     >>> ltop = MrsVariable(vid=0, sort='h')
     >>> rain_label = MrsVariable(vid=1, sort='h')
     >>> index = MrsVariable(vid=2, sort='e')
@@ -338,26 +339,6 @@ class Xmrs(LnkMixin):
             if ep1 != ep2:
                 return False
         return True
-
-    def pseudoequals(self, other):
-        """
-        This relaxes the comparison between the Xmrs object's EPs
-        by using the ElementaryPredication's pseudo_equals() method
-        """
-        if not isinstance(other, Xmrs):
-            return False
-        if self.hook != other.hook:
-            return False
-        eps1 = self.eps
-        eps2 = other.eps
-        if len(eps1) != len(eps2):
-            return False
-        zipped_eps = zip(sorted(eps1), sorted(eps2))
-        for ep1, ep2 in zipped_eps:
-            if not ep1.pseudoequals(ep2):
-                return False
-        return True
-        
 
     # Interface layer to the internal representations (and part of the
     # public API)
