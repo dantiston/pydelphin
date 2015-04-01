@@ -8,9 +8,9 @@ from delphin.interfaces.ace import InteractiveAce
 # For testing equality
 from delphin.derivation import Derivation
 from delphin.mrs.xmrs import Mrs
+from delphin.mrs.compare import isomorphic
 
-# For testing mrs/avm tokenization
-from delphin.tdl import tokenize as avm_tokenize
+# For testing mrs/avm
 from delphin.mrs.components import MrsVariable, HandleConstraint, ElementaryPredication, Pred, Argument, Hook
 
 
@@ -234,78 +234,11 @@ tree 1 #T[11 "XP" nil 836 np_frg_c #T[12 "NP" nil 835 hdn_bnp_c #T[13 "N" nil 83
         pass
 
 
-    def testExtractAvmList(self):
-        result = lui._extract_avm_list(['[', '*cons*', 'FIRST', ':', '#D', '[', 'qeq', 'HARG', ':', '<', '0', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '1', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*cons*', 'FIRST', ':', '#D', '[', 'qeq', 'HARG', ':', '<', '6', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '4', '>', '=', '#D', '[', 'h', ']', ']', 'REST', ':', '#D', '[', '*null*', ']', ']', ']', ']'])
-
-        target = [['#D', '[', 'qeq', 'HARG', ':', '<', '0', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '1', '>', '=', '#D', '[', 'h', ']', ']'],
-                  ['#D', '[', 'qeq', 'HARG', ':', '<', '6', '>', '=', '#D', '[', 'h', ']', 'LARG', ':', '<', '4', '>', '=', '#D', '[', 'h', ']', ']'],]
-
-        self.assertEqual(result, target)
-
-
     ## MRS Tests
     def testLoadMrs(self):
         # MRS for "I like dogs." from ERG 1212
         result = lui.load_mrs(__class__.gold_mrs_string)
-        
-        ### START DELETEME
-        # print("Hook equal {}".format(result.hook == __class__.goldMrs.hook))
-        # print("Length of eps equal {}".format(len(result.eps) == len(__class__.goldMrs.eps)))
-        # zipped_eps = zip(sorted(result.eps), sorted(__class__.goldMrs.eps))
-        # for ep1, ep2 in zipped_eps:
-        #     print(ep1)
-        #     print(ep2)
-        #     print(ep1 == ep2)
-        #     print("Labels equal: {}".format(ep1.label == ep2.label))
-        #     print("Argdicts equal: {}".format(ep1.argdict == ep2.argdict))
-        #     print("Nodes equal: {}".format(ep1._node == ep2._node))
-        #     print("Nodes: {} {}".format(ep1._node, ep2._node))
-        #     print()
-        #print("Hook equal {}".format(result.hook == __class__.goldMrs.hook))
-
-        ### END DELETEME
-
-        #self.assertEqual(__class__.goldMrs, result)
-        self.assertTrue(__class__.goldMrs.pseudoequals(result))
-
-    def testExtractMrsAvm(self):
-        result = lui._extract_mrs_avm(__class__.gold_mrs_tokens)
-        self.assertEqual(__class__.gold_mrs_mapping, result)
-
-
-    def testExtractHook(self):
-        result = lui._extract_hook(__class__.gold_mrs_mapping)
-        self.assertEqual(__class__.hook, result)
-
-
-    def testExtractRels(self):
-        """
-        The ElementaryPredication __eq__ method compares the nodeids, which
-        are assigned to each ElementaryPredication during the construction of
-        an MRS object, as in the setup. Therefore, this tests for equality
-        of the label and argdicts of each ElementaryPredication in the list,
-        as opposed to using their __eq__ method.
-        """
-        result = lui._extract_rels(__class__.gold_mrs_mapping)
-        for rel in zip(sorted(__class__.rels), sorted(result)):
-            self.assertEqual(rel[0].label, rel[0].label)
-            self.assertEqual(rel[0].argdict, rel[0].argdict)
-
-
-    def testExtractHCONS(self):
-        result = lui._extract_hcons(__class__.gold_mrs_mapping)
-        self.assertEqual(__class__.hcons, tuple(result))
-
-
-    @unittest.skip
-    def testExtractICONS(self):
-        result = lui._extract_icons(__class__._gold_mrs_mapping)
-        self.assertEqual(__class__.icons, tuple(result))
-
-
-    def testTokenizeMrs(self):
-        result = avm_tokenize(__class__.gold_mrs_string)
-        self.assertEqual(__class__.gold_mrs_tokens, result)
+        self.assertTrue(isomorphic(__class__.goldMrs, result))
 
 
     # Dump tests
