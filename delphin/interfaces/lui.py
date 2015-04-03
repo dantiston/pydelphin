@@ -32,7 +32,7 @@ Interface for interacting with a LUI protocol
         * dump_avm(): serializes PyDelphin AVM structure into LUI AVM string
         * dump_mrs(): serializes PyDelphin MRS structure into LUI MRS string
 
-@author T.J. Trimble
+# Author: T.J. Trimble <trimblet@me.com>
 """
 
 import re
@@ -135,7 +135,7 @@ def _no_parse(parser, datum=""):
 
 def _raise_exception(parser, datum=""):
     exception = parser._p.after
-    raise exception(str(parser._p))
+    raise Exception("\n".join([exception, str(parser._p)]))
 
 # Header actions
 derivation_header_tag_template = [
@@ -396,6 +396,7 @@ def _xcons_repl(match):
 
 
 def _clean_lui_mrs(mrs_string, sort="Simple MRS"):
+    mrs_string = mrs_string.strip().rstrip("^L") # Strip whitespace, line feed
     if mrs_string.startswith("avm "):
         mrs_string = mrs_string.split(None, 2)[-1]
     if mrs_string.endswith(' "{}"'.format(sort)):
@@ -405,7 +406,7 @@ def _clean_lui_mrs(mrs_string, sort="Simple MRS"):
 
 def _convert_lui_mrs_to_simple_mrs(mrs_string):
     """
-    @author: Michael Wayne Goodman
+    @author: Michael Wayne Goodman, T.J. Trimble
     """
     # strip header and footer
     mrs_string = _clean_lui_mrs(mrs_string)
@@ -446,23 +447,6 @@ def load_mrs(mrs_string):
     """
 
     return simplemrs.loads_one(_convert_lui_mrs_to_simple_mrs(mrs_string))
-
-    # tokens = avm_tokenize(mrs_string)
-    # result = _extract_mrs_avm(tokens)
-
-    # # Get HOOK
-    # hook = _extract_hook(result)
-    # # Get RELS
-    # rels = _extract_rels(result)
-    # # Get HCONS
-    # hcons = _extract_hcons(result)
-    # # Get ICONS (Planned feature)
-    # icons = _extract_icons(result)
-    # # Construct MRS
-    # return Mrs(hook=hook,
-    #            rels=rels,
-    #            hcons=hcons,
-    #            icons=icons)
 
 
 # Dump commands
