@@ -4,7 +4,7 @@ class TypedFeatureStructure(object):
 
     __slots__ = ['_type', '_avm']
 
-    def __init__(self, type, featvals=None):
+    def __init__(self, type=None, featvals=None):
         self._type = type
         self._avm = {}
         if isinstance(featvals, dict):
@@ -14,7 +14,7 @@ class TypedFeatureStructure(object):
 
     def __repr__(self):
         return '<TypedFeatureStructure object ({}) at {}>'.format(
-            self.type, id(self)
+            self._type, id(self)
         )
 
     def __setitem__(self, key, val):
@@ -71,4 +71,3 @@ class TypedFeatureStructure(object):
                         yield ('{}.{}'.format(feat, subfeat), subval)
             except AttributeError:
                 yield (feat, val)
-

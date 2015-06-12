@@ -45,8 +45,14 @@ from collections import defaultdict
 from ..derivation import Derivation
 from ..mrs import simplemrs
 from ..mrs.components import MrsVariable, HandleConstraint, ElementaryPredication, Pred, Argument, Hook
+from ..tfs import TypedFeatureStructure
 ## Methods
 from ..tdl import tokenize as avm_tokenize
+
+# Constants
+dag_bracket = "#D["
+tree_bracket = "#T["
+close_bracket = "]"
 
 # Utility Functions
 def _compile_tag_template(tag_template):
@@ -122,7 +128,7 @@ def _extract_parse_count(parser, datum=""):
 
 def _extract_parse(parser):
     """
-    Expected format: 
+    Expected format:
     \tree <tree_ID> #T[<edge_ID> "<label>" "<token>" <chart_ID> <rule_name> (#T[.*])?] "<text>"\
     """
 
@@ -206,30 +212,30 @@ def receive_derivations(parser, datum):
     return response
 
 
-## MRS commands
-def _extract_mrs(parser):
+## AVM/MRS commands
+def _extract_avm(parser):
     """
     Format:
         avm <avm_ID> #D[mrs TOP: <coref>=#D[.*] INDEX: <coref>=#D[.*] RELS: #D[.*] HCONS: #D[.*] (ICONS: #D[.*])?] "Simple MRS"
     """
     return parser._p.after
 
-mrs_header_tag_template = [
+avm_header_tag_template = [
     r"browse .*?\r\n", # 0
     pexpect.EOF, # 2
     pexpect.TIMEOUT, # 3
 ]
 
-mrs_header_tags = _compile_tag_template(mrs_header_tag_template)
+avm_header_tags = _compile_tag_template(avm_header_tag_template)
 
-mrs_header_actions = {
+avm_header_actions = {
     0:_pass,
     1:_raise_exception,
-    2:_raise_exception, # TODO: Something different
+    2:_raise_exception, # TODO: Something different for timeout
 }
 
 # Result actions
-mrs_result_tag_template = [
+avm_result_tag_template = [
     r"avm .*?\r\n", # 0
     r"LUI: unknown .*?\r\n", # 1
     r"LUI: out-of-date .*?\r\n", #2
@@ -237,37 +243,29 @@ mrs_result_tag_template = [
     pexpect.TIMEOUT, # 4
 ]
 
-mrs_result_actions = {
-    0:_extract_mrs,
+avm_result_actions = {
+    0:_extract_avm,
     1:_no_parse,
     2:_raise_exception,
     3:_no_parse,
     4:_raise_exception, # TODO: Something different
 }
 
-mrs_result_tags = _compile_tag_template(mrs_result_tag_template)
+avm_result_tags = _compile_tag_template(avm_result_tag_template)
 
 
 def receive_mrs(parser):
-    # TODO: this
     """
     Use pexpect to receive text output of MRS from parser in LUI mode
     """
-    header_ID = parser._p.expect(mrs_header_tags, timeout=1)
-    ID = parser._p.expect(mrs_result_tags, timeout=1)
-    response = mrs_result_actions[ID](parser)
+    header_ID = parser._p.expect(avm_header_tags, timeout=1)
+    ID = parser._p.expect(avm_result_tags, timeout=1)
+    response = avm_result_actions[ID](parser)
     return response
 
 
-## AVM commands
 def receive_avm(parser):
-    # TODO: this
-    """
-    Format:
-        avm <avm_ID> #D[.*] "edge"
-    """
-    avm = ""
-    return avm
+    return receive_mrs(parse)
 
 
 # Pickle API
@@ -276,17 +274,22 @@ def receive_avm(parser):
 strip_quotes = re.compile("^[\'\"]|[\'\"]$")
 legal_punctuation = re.escape("'’-+=/:.!?$<>@#%^&*")
 lui_derivation_pattern = " ".join(("(?P<EDGE_ID>\d+)",
-                                   "(?P<LABEL>{0}[\w{1}]+{0})",
-                                   "(?P<TOKEN>({0}[\w{1}]+{0}|nil))",
+                                   "(?P<LABEL>{quote}[\w{punc}]+{quote})",
+                                   "(?P<TOKEN>({quote}[\w{punc}]+{quote}|nil))",
                                    "(?P<CHART_ID>\d+)",
-                                   "(?P<RULE_NAME>[\w{1}]+)",)).format("[\'\"]?", legal_punctuation)
+                                   "(?P<RULE_NAME>[\w{punc}]+)",)).format(
+                                       quote="[\'\"]?",
+                                       punc=legal_punctuation)
 
+
+tree_prefix = "tree "
 def load_derivations(string):
     """
     Deserializes LUI tree string into PyDelphin Derivation objects
 
-    Based on NLTK's Tree.fromstring()
-    
+    Based on NLTK's Tree.fromstring():
+        http://www.nltk.org/_modules/nltk/tree.html#Tree.fromstring
+
     Format:
         (tree <tree_ID> #T[<edge_ID> "?<label>"? ("<token>"|nil) <chart_ID> <rule_name> (#T[.*])?] "<text>"\n\n)*
 
@@ -296,16 +299,14 @@ def load_derivations(string):
     for s in newlines.split(string):
         s = s.strip()
         # Parse introduction
-        if s.startswith("tree "):
+        if s.startswith(tree_prefix):
             _, tree_ID, s = s.split(None, 2)
             if s.endswith('"'): # Only do this if there's a quote at the end
                 s = s.rsplit('"', 2)[0].strip() # assumes no quote in text
         else:
             tree_ID = None
-        # Initialize bracket pointers        
-        open_b = "#T["
-        close_b = "]"
-        open_pattern, close_pattern = (re.escape(open_b), re.escape(close_b))
+        # Initialize bracket pointers
+        open_pattern, close_pattern = (re.escape(tree_bracket), re.escape(close_bracket))
         # Leaves and nodes contain non-whitespace, non-bracket characters
         valid_chars = '[^\s%s%s]+' % (open_pattern, close_pattern)
         bracket_patterns = '[%s%s]+' % (open_pattern, close_pattern)
@@ -319,7 +320,7 @@ def load_derivations(string):
             token = match.group()
             # Definition of a tree/subtree
             #  #T[EDGE_ID LABEL TOKEN CHART_ID RULE_NAME
-            if token.startswith(open_b):
+            if token.startswith(tree_bracket):
                 if len(stack) == 1 and len(stack[0][1]) > 0:
                     _parse_error(s, match, 'end-of-string')
                 edge_ID = match.group('EDGE_ID')
@@ -329,10 +330,10 @@ def load_derivations(string):
                 rule_name = match.group('RULE_NAME')
                 stack.append(((edge_ID, label, token, chart_ID, rule_name), []))
             # End of a tree/subtree
-            elif token == close_b:
+            elif token == close_bracket:
                 if len(stack) == 1:
                     if len(stack[0][1]) == 0:
-                        _parse_error(s, match, open_b)
+                        _parse_error(s, match, tree_bracket)
                     else:
                         _parse_error(s, match, 'end-of-string')
                 data, children = stack.pop()
@@ -340,32 +341,181 @@ def load_derivations(string):
             # Leaf node
             else:
                 if len(stack) == 1:
-                    _parse_error(s, match, open_b)
+                    _parse_error(s, match, tree_bracket)
                 stack[-1][1].append(token)
 
         # check that we got exactly one complete tree.
         if len(stack) > 1:
-            _parse_error(s, 'end-of-string', close_b)
+            _parse_error(s, 'end-of-string', close_bracket)
         elif len(stack[0][1]) == 0:
-            _parse_error(s, 'end-of-string', open_b)
+            _parse_error(s, 'end-of-string', tree_bracket)
         else:
             assert stack[0][0] is None
             assert len(stack[0][1]) == 1
         tree = stack[0][1][0]
-            
+
         # Get tree ID
         tree.tree_ID = tree_ID
         result.append(tree)
 
     return result
-    
 
-def load_avm():
-    # TODO: this
+# Loading AVM
+import sys
+
+lui_avm_pattern = " ".join(("(?P<TYPE_NAME>[\w{punc}]+)",
+                            "(?P<RULE_NAME>[\w{punc}]+)",)).format(
+                                punc=legal_punctuation)
+
+
+avm_prefix = "avm "
+avm_suffix = " \"edge\""
+avm_key_seperator = ":"
+def load_avm(avm_string):
     """
-    deserializes LUI AVM string into PyDelphin AVM object
+    deserializes LUI AVM string into PyDelphin TypedFeatureStructure object
+
+    format:
+        (avm <avm_ID> )?#D[<type_name> (<key>: (<coref>= )?<value>)* ]( "edge")
     """
-    pass
+
+    if dag_bracket not in avm_string:
+        return TypedFeatureStructure()
+    avm_string = avm_string.strip()
+
+    # Parse introduction
+    if avm_string.startswith(avm_prefix):
+        _, avm_ID, avm_string = avm_string.split(None, 2)
+        if avm_string.endswith(avm_suffix): # Only do this if there's a quote at the end
+            avm_string = avm_string.rsplit('"', 2)[0].strip() # assumes no quote in text
+    else:
+        avm_ID = None
+    # Initializations
+    open_pattern, close_pattern = (re.escape(dag_bracket), re.escape(close_bracket))
+    next_is_value = False
+    next_is_coreferenced = False
+    featvals = {}
+    type_name = ""
+    # Leaves and nodes contain non-whitespace, non-bracket characters
+    valid_chars = '[^\s%s%s]+' % (open_pattern, close_pattern)
+    bracket_patterns = '[%s%s]+' % (open_pattern, close_pattern)
+    # Construct a regexp that will tokenize the string.
+    token_re = re.compile('%s%s|%s|(%s)' % (
+        open_pattern, lui_avm_pattern, close_pattern, valid_chars))
+    # Walk through each token, updating a stack of trees.
+    stack = [(None, {}, [])] # list of (node, dict, children) tuples
+    #tokens = list(token_re.finditer(avm_string))
+    tokens = avm_string.split()
+    for i, token in enumerate(tokens):
+        #token = match.group()
+        #print(token, file=sys.stderr)
+
+        # End bracket
+        if token == close_bracket:
+            if len(stack) == 1:
+                if len(stack[0][1]) == 0:
+                    _parse_error(avm_string, token, dag_bracket)
+                else:
+                    _parse_error(avm_string, token, 'end-of-string')
+            type_name, featvals, children = stack.pop()
+            print(stack[-1])
+            stack[-1][2].append(TypedFeatureStructure(type=type_name, featvals=featvals))
+            featvals = {}
+            type_name=""
+        # Key
+        elif token.endswith(avm_key_seperator):
+            key = token[:-1]
+            next_is_value = True
+        # Value
+        elif next_is_value:
+            # Coreference
+            if is_coreference_tag(token):
+                next_is_coreferenced = True
+            else:
+                # Keep track of coreference
+                if next_is_coreferenced:
+                    pass
+                # For now, store coreferences as strings
+                # TODO: Figure out what to do with coreferences
+                #elif is_coreference_value(token):
+                #    pass
+                next_is_coreferenced = False
+                # SubAVM
+                if token.startswith(dag_bracket):
+                    if len(stack) == 1 and len(stack[0][1]) > 0:
+                        _parse_error(avm_string, token, 'end-of-string')
+                    stack.append((token[len(dag_bracket):], featvals, []))
+                # String
+                else:
+                    featvals[key] = token
+                next_is_value = False
+        # Out of place coreference
+        elif is_coreference_tag(token):
+            _parse_error(avm_string, token, "KEY or END BRACKET")
+        # Boolean
+        else:
+            featvals[token] = True
+
+        # # Definition of a tree/subtree
+        # if token.startswith(dag_bracket):
+        #     if len(stack) == 1 and len(stack[0][1]) > 0:
+        #         _parse_error(avm_string, match, 'end-of-string')
+        #     edge_ID = match.group('EDGE_ID')
+        #     label = match.group('LABEL')
+        #     token = match.group('TOKEN')
+        #     chart_ID = match.group('CHART_ID')
+        #     rule_name = match.group('RULE_NAME')
+        #     stack.append(((edge_ID, label, token, chart_ID, rule_name), []))
+        # # End of a tree/subtree
+        # elif token == close_bracket:
+        #     if len(stack) == 1:
+        #         if len(stack[0][1]) == 0:
+        #             _parse_error(avm_string, match, dag_bracket)
+        #         else:
+        #             _parse_error(avm_string, match, 'end-of-string')
+        #     data, children = stack.pop()
+        #     stack[-1][1].append(Derivation(None, data_package=data, children=children))
+        # # Leaf node
+        # else:
+        #     if len(stack) == 1:
+        #         _parse_error(avm_string, match, dag_bracket)
+        #     stack[-1][1].append(token)
+
+    # check that we got exactly one complete avm
+    if len(stack) > 1:
+        _parse_error(avm_string, 'end-of-string', close_bracket)
+    elif len(stack[0][1]) == 0:
+        _parse_error(avm_string, 'end-of-string', dag_bracket)
+    else:
+        assert stack[0][0] is None
+        assert len(stack[0][1]) == 1
+    avm = stack[0][1][0]
+
+    # Get tree ID
+    avm.avm_ID = avm_ID
+
+    return avm
+
+
+def is_coreference_tag(string):
+    """
+    Identifies coreference tags is the following format:
+        "<{int}>"
+
+    where {int} must be a digit
+    """
+    return string.endswith("=") and is_coreference_value(string[:-1])
+
+
+def is_coreference_value(string):
+    """
+    Identifies coreference values in the following format:
+        "<{int}>"
+
+    where {int} must be a digit
+    """
+    return string.startswith("<") and string.endswith(">") and string[1:-1].isdigit()
+
 
 ## MRS
 # For mrs conversion
@@ -436,7 +586,7 @@ def _convert_lui_mrs_to_simple_mrs(mrs_string):
 def load_mrs(mrs_string):
     """
     deserializes LUI MRS string into PyDelphin MRS object
-    
+
     Format:
         #D[mrs TOP: <coref>=#D[<argument_label>]
                INDEX: <coref>=#D[.*]
@@ -478,13 +628,13 @@ def dump_mrs():
 # Errors
 def _parse_error(s, match, expecting):
     """
-    Raise an error from load_derivations()
+    Raise an error from load_derivations() & load_avm()
 
     From NLTK: http://www.nltk.org/_modules/nltk/tree.html
     """
     # Construct a basic error message
-    if match == 'end-of-string':
-        pos, token = len(s), 'end-of-string'
+    if isinstance(match, str):
+        pos, token = len(s), match
     else:
         pos, token = match.start(), match.group()
     msg = 'lui.load_derivations(): expected %r but got %r\n%sat index %d.' % (
