@@ -389,12 +389,12 @@ def load_avm(avm_string):
         if avm_string.endswith(avm_suffix): # Only do this if there's a quote at the end
             avm_string = avm_string.rsplit('"', 2)[0].strip() # assumes no quote in text
     else:
-        avm_ID = None
+        avm_ID = -1
     # Initializations
     open_pattern, close_pattern = (re.escape(dag_bracket), re.escape(close_bracket))
     next_is_value = False
     next_is_coreferenced = False
-    featvals = {}
+    #featvals = {}
     type_name = ""
     # Leaves and nodes contain non-whitespace, non-bracket characters
     valid_chars = '[^\s%s%s]+' % (open_pattern, close_pattern)
@@ -406,26 +406,196 @@ def load_avm(avm_string):
     stack = [(None, {}, [])] # list of (node, dict, children) tuples
     #tokens = list(token_re.finditer(avm_string))
     tokens = avm_string.split()
-    for i, token in enumerate(tokens):
-        #token = match.group()
-        #print(token, file=sys.stderr)
+    # for i, token in enumerate(tokens):
+    #     #token = match.group()
+    #     print(token, file=sys.stderr)
 
+    #     # End bracket
+    #     if token == close_bracket:
+    #         if len(stack) == 1:
+    #             if len(stack[0][1]) == 0:
+    #                 print("Error 1", file=sys.stderr)
+    #                 _parse_error(avm_string, token, dag_bracket)
+    #             else:
+    #                 print("Error 2", file=sys.stderr)
+    #                 _parse_error(avm_string, token, 'end-of-string')
+    #         type_name, featvals, children = stack.pop()
+    #         stack[-1][2].append(TypedFeatureStructure(type=type_name, featvals=featvals))
+    #         print(stack[-1], file=sys.stderr)
+    #         featvals = {}
+    #         type_name=""
+    #     # Key
+    #     elif token.endswith(avm_key_seperator):
+    #         key = token[:-1]
+    #         next_is_value = True
+    #         continue
+    #     # Value
+    #     elif next_is_value:
+    #         # Coreference
+    #         if is_coreference_tag(token):
+    #             next_is_coreferenced = True
+    #         else:
+    #             # Keep track of coreference
+    #             if next_is_coreferenced:
+    #                 pass
+    #             # For now, store coreferences as strings
+    #             # TODO: Figure out what to do with coreferences
+    #             #elif is_coreference_value(token):
+    #             #    pass
+    #             next_is_coreferenced = False
+    #             # SubAVM
+    #             if token.startswith(dag_bracket):
+    #                 if len(stack) == 1 and len(stack[0][1]) > 0:
+    #                     print("Error 3", file=sys.stderr)
+    #                     _parse_error(avm_string, token, 'end-of-string')
+    #                 stack.append((token[len(dag_bracket):], featvals, []))
+    #             # String
+    #             else:
+    #                 featvals[key] = token
+    #             next_is_value = False
+    #     # Out of place coreference
+    #     elif is_coreference_tag(token):
+    #         print("Error 4", file=sys.stderr)
+    #         _parse_error(avm_string, token, "KEY or END BRACKET")
+    #     # Boolean
+    #     else:
+    #         featvals[token] = True
+
+    #     # # Definition of a tree/subtree
+    #     # if token.startswith(dag_bracket):
+    #     #     if len(stack) == 1 and len(stack[0][1]) > 0:
+    #     #         _parse_error(avm_string, match, 'end-of-string')
+    #     #     edge_ID = match.group('EDGE_ID')
+    #     #     label = match.group('LABEL')
+    #     #     token = match.group('TOKEN')
+    #     #     chart_ID = match.group('CHART_ID')
+    #     #     rule_name = match.group('RULE_NAME')
+    #     #     stack.append(((edge_ID, label, token, chart_ID, rule_name), []))
+    #     # # End of a tree/subtree
+    #     # elif token == close_bracket:
+    #     #     if len(stack) == 1:
+    #     #         if len(stack[0][1]) == 0:
+    #     #             _parse_error(avm_string, match, dag_bracket)
+    #     #         else:
+    #     #             _parse_error(avm_string, match, 'end-of-string')
+    #     #     data, children = stack.pop()
+    #     #     stack[-1][1].append(Derivation(None, data_package=data, children=children))
+    #     # # Leaf node
+    #     # else:
+    #     #     if len(stack) == 1:
+    #     #         _parse_error(avm_string, match, dag_bracket)
+    #     #     stack[-1][1].append(token)
+
+    # # check that we got exactly one complete avm
+    # if len(stack) > 1:
+    #     print("Error 5", file=sys.stderr)
+    #     _parse_error(avm_string, 'end-of-string', close_bracket)
+    # elif len(stack[0][1]) == 0:
+    #     print("Error 6", file=sys.stderr)
+    #     _parse_error(avm_string, 'end-of-string', dag_bracket)
+    # else:
+    #     assert stack[0][0] is None
+    #     assert len(stack[0][1]) == 1
+    # avm = stack[0][1][0]
+
+
+
+        # for i, token in enumerate(tokens):
+        #     #token = match.group()
+        #     print(token, file=output)
+
+        #     # Beginning of AVM
+        #     if token.startswith(dag_bracket):
+        #         if len(stack) == 1 and len(stack[0][1]) > 0:
+        #             _parse_error(s, match, 'end-of-string')
+        #         type_name = token[len(dag_bracket):]
+        #         stack.append((type_name, featvals, []))
+        #         type_name = ""
+        #         featvals = {}
+        #     # End bracket
+        #     elif token == close_bracket:
+
+        #         if len(stack) == 1:
+        #            if len(stack[0][2]) == 0:
+
+        #                _parse_error(avm_string, token, dag_bracket)
+        #            else:
+
+        #                _parse_error(avm_string, token, 'end-of-string')
+        #         type_name, featvals, children = stack.pop()
+        #         stack[-1][2].append(TypedFeatureStructure(type=type_name, featvals=featvals))
+        #         featvals = {}
+        #         type_name=""
+        #     # Key
+        #     elif token.endswith(avm_key_seperator):
+        #         key = token[:-len(avm_key_seperator)]
+        #         next_is_value = True
+        #         continue
+        #     # Value
+        #     elif next_is_value:
+        #         # Coreference
+        #         if is_coreference_tag(token):
+        #             next_is_coreferenced = True
+        #         else:
+        #             # Keep track of coreference
+        #             if next_is_coreferenced:
+        #                 pass
+        #             # For now, store coreferences as strings
+        #             # TODO: Figure out what to do with coreferences
+        #             #elif is_coreference_value(token):
+        #             #    pass
+        #             next_is_coreferenced = False
+        #             # SubAVM
+        #             if token.startswith(dag_bracket):
+        #                 if len(stack) == 1 and len(stack[0][2]) > 0:
+
+        #                     _parse_error(avm_string, token, 'end-of-string')
+        #                 stack.append((token[len(dag_bracket):], featvals, []))
+        #             # String
+        #             else:
+        #                 featvals[key] = token
+        #             next_is_value = False
+        #     # Out of place coreference
+        #     elif is_coreference_tag(token):
+
+        #         _parse_error(avm_string, token, "KEY or END BRACKET")
+        #     # Boolean
+        #     else:
+        #         featvals[token] = True
+
+        # # check that we got exactly one complete avm
+        # if len(stack) > 1:
+
+        #     _parse_error(avm_string, 'end-of-string', close_bracket)
+        # elif len(stack[0][2]) == 0:
+
+        #     _parse_error(avm_string, 'end-of-string', dag_bracket)
+        # else:
+        #     assert stack[0][0] is None
+        #     assert len(stack[0][2]) == 1
+        # avm = stack[0][2][0]
+
+    for i, token in enumerate(tokens):
+        # Beginning of AVM
+        if token.startswith(dag_bracket):
+            if len(stack) == 1 and len(stack[0][1]) > 0:
+                _parse_error(s, match, 'end-of-string')
+            stack.append((token[len(dag_bracket):], stack[-1][1], []))
         # End bracket
-        if token == close_bracket:
+        elif token == close_bracket:
             if len(stack) == 1:
-                if len(stack[0][1]) == 0:
-                    _parse_error(avm_string, token, dag_bracket)
-                else:
-                    _parse_error(avm_string, token, 'end-of-string')
+               if len(stack[0][2]) == 0:
+                   _parse_error(avm_string, token, dag_bracket)
+               else:
+                   _parse_error(avm_string, token, 'end-of-string')
             type_name, featvals, children = stack.pop()
-            print(stack[-1])
             stack[-1][2].append(TypedFeatureStructure(type=type_name, featvals=featvals))
-            featvals = {}
-            type_name=""
+            if featvals: print(featvals)
         # Key
         elif token.endswith(avm_key_seperator):
-            key = token[:-1]
+            key = token[:-len(avm_key_seperator)]
             next_is_value = True
+            continue
         # Value
         elif next_is_value:
             # Coreference
@@ -434,65 +604,44 @@ def load_avm(avm_string):
             else:
                 # Keep track of coreference
                 if next_is_coreferenced:
-                    pass
+                    pass # TODO: This
                 # For now, store coreferences as strings
                 # TODO: Figure out what to do with coreferences
-                #elif is_coreference_value(token):
-                #    pass
+                elif is_coreference_value(token):
+                    pass
                 next_is_coreferenced = False
                 # SubAVM
                 if token.startswith(dag_bracket):
-                    if len(stack) == 1 and len(stack[0][1]) > 0:
+                    if len(stack) == 1 and len(stack[0][2]) > 0:
                         _parse_error(avm_string, token, 'end-of-string')
-                    stack.append((token[len(dag_bracket):], featvals, []))
+                    #stack.append((token[len(dag_bracket):], featvals, []))
+                    stack.append((token[len(dag_bracket):], stack[-1][1], []))
                 # String
                 else:
-                    featvals[key] = token
+                    stack[-1][1][key] = token
                 next_is_value = False
         # Out of place coreference
         elif is_coreference_tag(token):
             _parse_error(avm_string, token, "KEY or END BRACKET")
         # Boolean
         else:
-            featvals[token] = True
-
-        # # Definition of a tree/subtree
-        # if token.startswith(dag_bracket):
-        #     if len(stack) == 1 and len(stack[0][1]) > 0:
-        #         _parse_error(avm_string, match, 'end-of-string')
-        #     edge_ID = match.group('EDGE_ID')
-        #     label = match.group('LABEL')
-        #     token = match.group('TOKEN')
-        #     chart_ID = match.group('CHART_ID')
-        #     rule_name = match.group('RULE_NAME')
-        #     stack.append(((edge_ID, label, token, chart_ID, rule_name), []))
-        # # End of a tree/subtree
-        # elif token == close_bracket:
-        #     if len(stack) == 1:
-        #         if len(stack[0][1]) == 0:
-        #             _parse_error(avm_string, match, dag_bracket)
-        #         else:
-        #             _parse_error(avm_string, match, 'end-of-string')
-        #     data, children = stack.pop()
-        #     stack[-1][1].append(Derivation(None, data_package=data, children=children))
-        # # Leaf node
-        # else:
-        #     if len(stack) == 1:
-        #         _parse_error(avm_string, match, dag_bracket)
-        #     stack[-1][1].append(token)
+            stack[-1][1][token] = True
 
     # check that we got exactly one complete avm
     if len(stack) > 1:
         _parse_error(avm_string, 'end-of-string', close_bracket)
-    elif len(stack[0][1]) == 0:
+    elif len(stack[0][2]) == 0:
         _parse_error(avm_string, 'end-of-string', dag_bracket)
     else:
         assert stack[0][0] is None
-        assert len(stack[0][1]) == 1
-    avm = stack[0][1][0]
+        assert len(stack[0][2]) == 1
+    avm = stack[0][2][0]
 
-    # Get tree ID
-    avm.avm_ID = avm_ID
+    # Get AVM ID
+    #avm.avm_ID = avm_ID
+
+    print(avm._avm)
+    #print(avm._avm, file=sys.stderr)
 
     return avm
 
@@ -637,7 +786,7 @@ def _parse_error(s, match, expecting):
         pos, token = len(s), match
     else:
         pos, token = match.start(), match.group()
-    msg = 'lui.load_derivations(): expected %r but got %r\n%sat index %d.' % (
+    msg = 'lui: expected %r but got %r\n%sat index %d.' % (
            expecting, token, ' '*12, pos)
     # Add a display showing the error token itsels:
     s = s.replace('\n', ' ').replace('\t', ' ')
