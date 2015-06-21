@@ -412,94 +412,28 @@ def load_avm(avm_string):
     stack = [(type_name, {}, key, [])] # list of (node, featurevals, key, children) tuples
     tokens = avm_string.split()
 
-    # with open("/home/dantiston/Desktop/output.txt", "w") as output:
-    #     for i, token in enumerate(tokens):
-    #         #print(token, file=output)
-    #         # Beginning of AVM
-    #         if token.startswith(dag_bracket):
-    #             if len(stack) == 1 and len(stack[first_i][children_i]) > 0:
-    #                 _parse_error(s, token, 'end-of-string')
-    #             stack.append((token[len(dag_bracket):], {}, key, []))
-    #             #print("STORING: {type_name: %s, featvals: %s, key: %s, children: %s}" % (token[len(dag_bracket):], {}, key, []), file=output)
-    #         # End bracket
-    #         elif token == close_bracket:
-    #             #print("PROCESSING END OF AVM", file=output)
-    #             if len(stack) == 1:
-    #                if len(stack[first_i][children_i]) == 0:
-    #                    _parse_error(avm_string, token, dag_bracket)
-    #                else:
-    #                    _parse_error(avm_string, token, 'end-of-string')
-    #             type_name, featvals, key, children = stack.pop()
-    #             #print("Requesting TFS: {type: %s, featvals: %s}" % (type_name, featvals), file=output)
-    #             tfs = TypedFeatureStructure(type=type_name, featvals=featvals)
-    #             #print("Built TFS: " + str(key), file=output)
-    #             if len(stack) > 1: # THIS IS THE END OF A VALUE, ADD THE AVM TO THE FEATURES DICTIONARY
-    #                 stack[last_i][features_i][key] = tfs
-    #             else: # THIS IS THE END OF THE OVERALL AVM, PUT THE AVM ON THE TOP'S LIST
-    #                 stack[last_i][children_i].append(tfs)
-    #             #print("CONSTRUCTING TFS: {type_name: %s, featvals: %s, key: %s, children: %s}" % (type_name, featvals, key, children), file=output)
-    #         # Key
-    #         elif token.endswith(avm_key_seperator):
-    #             key = token[:-len(avm_key_seperator)]
-    #             next_is_value = True
-    #             continue
-    #         # Value
-    #         elif next_is_value:
-    #             # Coreference
-    #             if is_coreference_tag(token):
-    #                 next_is_coreferenced = True
-    #             else:
-    #                 # Keep track of coreference
-    #                 if next_is_coreferenced:
-    #                     pass # TODO: This
-    #                 # For now, store coreferences as strings
-    #                 # TODO: Figure out what to do with coreferences
-    #                 elif is_coreference_value(token):
-    #                     pass
-    #                 next_is_coreferenced = False
-    #                 # SubAVM
-    #                 if token.startswith(dag_bracket):
-    #                     if len(stack) == 1 and len(stack[first_i][children_i]) > 0:
-    #                         _parse_error(avm_string, token, 'end-of-string')
-    #                     #stack.append((token[len(dag_bracket):], featvals, []))
-    #                     stack.append((token[len(dag_bracket):], {}, key, []))
-    #                     #print("STORING: {type_name: %s, featvals: %s, key: %s, children: %s}" % (token[len(dag_bracket):], {}, key, []), file=output)
-    #                 # String
-    #                 else:
-    #                     stack[last_i][features_i][key] = token
-    #                 next_is_value = False
-    #         # Out of place coreference
-    #         elif is_coreference_tag(token):
-    #             _parse_error(avm_string, token, "KEY or " + close_bracket)
-    #         # Boolean
-    #         else:
-    #             stack[last_i][features_i][token] = True
-
     for i, token in enumerate(tokens):
-        #print(token, file=output)
         # Beginning of AVM
         if token.startswith(dag_bracket):
             if len(stack) == 1 and len(stack[first_i][children_i]) > 0:
                 _parse_error(s, token, 'end-of-string')
             stack.append((token[len(dag_bracket):], {}, key, []))
-            #print("STORING: {type_name: %s, featvals: %s, key: %s, children: %s}" % (token[len(dag_bracket):], {}, key, []), file=output)
         # End bracket
         elif token == close_bracket:
-            #print("PROCESSING END OF AVM", file=output)
             if len(stack) == 1:
                if len(stack[first_i][children_i]) == 0:
                    _parse_error(avm_string, token, dag_bracket)
                else:
                    _parse_error(avm_string, token, 'end-of-string')
             type_name, featvals, key, children = stack.pop()
-            #print("Requesting TFS: {type: %s, featvals: %s}" % (type_name, featvals), file=output)
             tfs = TypedFeatureStructure(type=type_name, featvals=featvals)
-            #print("Built TFS: " + str(key), file=output)
-            if len(stack) > 1: # THIS IS THE END OF A VALUE, ADD THE AVM TO THE FEATURES DICTIONARY
+            if len(stack) > 1:
+                # This is the end of a value, add the AVM to featvals
                 stack[last_i][features_i][key] = tfs
-            else: # THIS IS THE END OF THE OVERALL AVM, PUT THE AVM ON THE TOP'S LIST
+            else:
+                # This is the end of the overall AVM,
+                # put the AVM on the top of the stack's children list
                 stack[last_i][children_i].append(tfs)
-            #print("CONSTRUCTING TFS: {type_name: %s, featvals: %s, key: %s, children: %s}" % (type_name, featvals, key, children), file=output)
         # Key
         elif token.endswith(avm_key_seperator):
             key = token[:-len(avm_key_seperator)]
@@ -523,9 +457,7 @@ def load_avm(avm_string):
                 if token.startswith(dag_bracket):
                     if len(stack) == 1 and len(stack[first_i][children_i]) > 0:
                         _parse_error(avm_string, token, 'end-of-string')
-                    #stack.append((token[len(dag_bracket):], featvals, []))
                     stack.append((token[len(dag_bracket):], {}, key, []))
-                    #print("STORING: {type_name: %s, featvals: %s, key: %s, children: %s}" % (token[len(dag_bracket):], {}, key, []), file=output)
                 # String
                 else:
                     stack[last_i][features_i][key] = token
@@ -536,7 +468,6 @@ def load_avm(avm_string):
         # Boolean
         else:
             stack[last_i][features_i][token] = True
-
 
     # check that we got exactly one complete avm
     if len(stack) > 1:
@@ -551,9 +482,6 @@ def load_avm(avm_string):
 
     # Get AVM ID
     #avm.avm_ID = avm_ID
-
-    #print("AVM: " + str(avm._avm), file=output)
-    #print(avm._avm, file=sys.stderr)
 
     return avm
 
