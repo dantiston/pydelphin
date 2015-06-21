@@ -5,6 +5,7 @@ class TypedFeatureStructure(object):
     __slots__ = ['_type', '_avm']
 
     def __init__(self, type=None, featvals=None):
+        print("Constructing TFS")
         self._type = type
         self._avm = {}
         if isinstance(featvals, dict):
