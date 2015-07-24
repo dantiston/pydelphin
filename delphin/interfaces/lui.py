@@ -143,6 +143,7 @@ def _raise_exception(parser, datum=""):
     exception = parser._p.after
     raise Exception("\n".join([exception, str(parser._p)]))
 
+
 # Header actions
 derivation_header_tag_template = [
     r"parse .*?\r\n", # 0
@@ -220,6 +221,7 @@ def _extract_avm(parser):
     """
     return parser._p.after
 
+
 avm_header_tag_template = [
     r"browse .*?\r\n", # 0
     pexpect.EOF, # 2
@@ -265,7 +267,7 @@ def receive_mrs(parser):
 
 
 def receive_avm(parser):
-    return receive_mrs(parse)
+    return receive_mrs(parser)
 
 
 # Pickle API
@@ -283,6 +285,7 @@ lui_derivation_pattern = " ".join(("(?P<EDGE_ID>\d+)",
 
 
 tree_prefix = "tree "
+
 def load_derivations(string):
     """
     Deserializes LUI tree string into PyDelphin Derivation objects
@@ -360,6 +363,7 @@ def load_derivations(string):
 
     return result
 
+
 # Loading AVM
 lui_avm_pattern = " ".join(("(?P<TYPE_NAME>[\w{punc}]+)",
                             "(?P<RULE_NAME>[\w{punc}]+)",)).format(
@@ -375,31 +379,36 @@ first_i = 0
 type_i = 0
 features_i = 1
 key_i = 2
-children_i = 3
+coref_i = 3
+children_i = 4
+
 
 def load_avm(avm_string):
     """
     deserializes LUI AVM string into PyDelphin TypedFeatureStructure object
 
     format:
-        (avm <avm_ID> )?#D[<type_name> (<key>: (<coref>= )?<value>)* ]( "edge")
+        (avm <avm_ID> )?#D[<type_name> (<key>: (<coref>= )?<value>)* ]( "edge")?
+
+    adapted from http://www.nltk.org/_modules/nltk/tree.html#Tree.fromstring
     """
 
     if dag_bracket not in avm_string:
-        return TypedFeatureStructure()
+        return None
     avm_string = avm_string.strip()
 
     # Parse introduction
     if avm_string.startswith(avm_prefix):
         _, avm_ID, avm_string = avm_string.split(None, 2)
         if avm_string.endswith(avm_suffix): # Only do this if there's a quote at the end
-            avm_string = avm_string.rsplit('"', 2)[0].strip() # assumes no quote in text
+            avm_string = avm_string.rsplit('"', 2)[0].rstrip() # assumes no quote in LUI type
     else:
         avm_ID = -1
     # Initializations
     open_pattern, close_pattern = (re.escape(dag_bracket), re.escape(close_bracket))
     type_name = None
     key = None
+    coref = None
     next_is_value = False
     next_is_coreferenced = False
     # Leaves and nodes contain non-whitespace, non-bracket characters
@@ -409,15 +418,15 @@ def load_avm(avm_string):
     token_re = re.compile('%s%s|%s|(%s)' % (
         open_pattern, lui_avm_pattern, close_pattern, valid_chars))
     # Walk through each token, updating a stack of trees.
-    stack = [(type_name, {}, key, [])] # list of (node, featurevals, key, children) tuples
-    tokens = avm_string.split()
+    stack = [(type_name, {}, key, coref, [])] # list of (type_name, featurevals, key, coref, children) tuples
+    tokens = avm_string.split() # Split on whitespace
 
     for i, token in enumerate(tokens):
         # Beginning of AVM
         if token.startswith(dag_bracket):
             if len(stack) == 1 and len(stack[first_i][children_i]) > 0:
-                _parse_error(s, token, 'end-of-string')
-            stack.append((token[len(dag_bracket):], {}, key, []))
+                _parse_error(avm_string, token, 'end-of-string')
+            stack.append((token[len(dag_bracket):], {}, key, coref, []))
         # End bracket
         elif token == close_bracket:
             if len(stack) == 1:
@@ -425,8 +434,8 @@ def load_avm(avm_string):
                    _parse_error(avm_string, token, dag_bracket)
                else:
                    _parse_error(avm_string, token, 'end-of-string')
-            type_name, featvals, key, children = stack.pop()
-            tfs = TypedFeatureStructure(type=type_name, featvals=featvals)
+            type_name, featvals, key, coref, children = stack.pop()
+            tfs = TypedFeatureStructure(type=type_name, featvals=featvals, coref=coref)
             if len(stack) > 1:
                 # This is the end of a value, add the AVM to featvals
                 stack[last_i][features_i][key] = tfs
@@ -434,40 +443,52 @@ def load_avm(avm_string):
                 # This is the end of the overall AVM,
                 # put the AVM on the top of the stack's children list
                 stack[last_i][children_i].append(tfs)
+            coref = None
+            next_is_coreferenced = False
         # Key
         elif token.endswith(avm_key_seperator):
             key = token[:-len(avm_key_seperator)]
             next_is_value = True
-            continue
+            coref = None
+            next_is_coreferenced = False
         # Value
         elif next_is_value:
+            #coref = None
             # Coreference
             if is_coreference_tag(token):
                 next_is_coreferenced = True
+                coref = get_coreference_id(token)
             else:
-                # Keep track of coreference
-                if next_is_coreferenced:
-                    pass # TODO: This
-                # For now, store coreferences as strings
-                # TODO: Figure out what to do with coreferences
-                elif is_coreference_value(token):
-                    pass
-                next_is_coreferenced = False
                 # SubAVM
                 if token.startswith(dag_bracket):
                     if len(stack) == 1 and len(stack[first_i][children_i]) > 0:
                         _parse_error(avm_string, token, 'end-of-string')
-                    stack.append((token[len(dag_bracket):], {}, key, []))
+                    stack.append((token[len(dag_bracket):], {}, key, coref, []))
+                    coref = None
                 # String
                 else:
-                    stack[last_i][features_i][key] = token
+                    # TODO: DELETEME
+                    #print("\t".join(map(str, ("VALUE: " + token, is_coreference_value(token), next_is_coreferenced, tokens[i-1]))))
+                    if next_is_coreferenced:
+                        # Add an AVM with the coreference value
+                        stack[last_i][features_i][key] = TypedFeatureStructure(type=token, coref=coref)
+                    elif is_coreference_value(token):
+                        # Add an empty AVM with the coreference
+                        stack[last_i][features_i][key] = TypedFeatureStructure(coref=get_coreference_id(token))
+                    else:
+                        stack[last_i][features_i][key] = TypedFeatureStructure(type=token)
+                    coref = None
                 next_is_value = False
+                next_is_coreferenced = False
         # Out of place coreference
         elif is_coreference_tag(token):
             _parse_error(avm_string, token, "KEY or " + close_bracket)
-        # Boolean
+        # Boolean # For now, assume booleans don't exist
         else:
-            stack[last_i][features_i][token] = True
+            _parse_error(avm_string, token, "VALUE")
+            #stack[last_i][features_i][token] = True # No booleans
+            coref = None
+            next_is_coreferenced = False
 
     # check that we got exactly one complete avm
     if len(stack) > 1:
@@ -481,7 +502,7 @@ def load_avm(avm_string):
     avm = stack[first_i][children_i][0]
 
     # Get AVM ID
-    #avm.avm_ID = avm_ID
+    avm.avm_ID = avm_ID
 
     return avm
 
@@ -489,7 +510,7 @@ def load_avm(avm_string):
 def is_coreference_tag(string):
     """
     Identifies coreference tags is the following format:
-        "<{int}>"
+        "<{int}>="
 
     where {int} must be a digit
     """
@@ -504,6 +525,19 @@ def is_coreference_value(string):
     where {int} must be a digit
     """
     return string.startswith("<") and string.endswith(">") and string[1:-1].isdigit()
+
+
+def get_coreference_id(string):
+    """
+    Extracts coreference ID in the following format:
+        "<{int}>(=)?"
+    """
+    if string.endswith("="):
+        string = string[:-1]
+    if is_coreference_value(string):
+        return string[1:-1]
+    else:
+        return None
 
 
 ## MRS

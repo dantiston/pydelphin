@@ -20,7 +20,7 @@ class TestInteractiveAce(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         # TODO: Find the ERG
-        TestInteractiveAce.ace = InteractiveAce('/home/dantiston/delphin/erg.dat')
+        TestInteractiveAce.ace = InteractiveAce('~/delphin/erg.dat')
         TestInteractiveAce.fake = FakePexpect()
 
     @classmethod
