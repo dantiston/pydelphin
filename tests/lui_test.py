@@ -128,6 +128,8 @@ class TestLui(unittest.TestCase):
 
         cls.other_mrs_string = '''avm 8 #D[mrs TOP: <0>=#D[h] INDEX: <2>=#D[e SF: "prop-or-ques"] RELS: #D[*cons* FIRST: #D[unknown_rel LBL: <1>=#D[h] ARG0: <2>=#D[e SF: "prop-or-ques"] ARG: <4>=#D[x PERS: "3" NUM: "sg" IND: "+"]] REST: #D[*cons* FIRST: #D[udef_q_rel LBL: <5>=#D[h] ARG0: <4>=#D[x PERS: "3" NUM: "sg" IND: "+"] RSTR: <6>=#D[h] BODY: <7>=#D[h]] REST: #D[*cons* FIRST: #D[compound_rel LBL: <8>=#D[h] ARG0: <9>=#D[e SF: "prop" TENSE: "untensed" MOOD: "indicative" PROG: "-" PERF: "-"] ARG1: <4>=#D[x PERS: "3" NUM: "sg" IND: "+"] ARG2: <10>=#D[x PERS: "3" NUM: "pl" IND: "+"]] REST: #D[*cons* FIRST: #D[proper_q_rel LBL: <11>=#D[h] ARG0: <10>=#D[x PERS: "3" NUM: "pl" IND: "+"] RSTR: <12>=#D[h] BODY: <13>=#D[h]] REST: #D[*cons* FIRST: #D[named_rel LBL: <14>=#D[h] CARG: "\\"I\\"" ARG0: <10>=#D[x PERS: "3" NUM: "pl" IND: "+"]] REST: #D[*cons* FIRST: #D["_run_n_of_rel" LBL: <8>=#D[h] ARG0: <4>=#D[x PERS: "3" NUM: "sg" IND: "+"] ARG1: <16>=#D[i]] REST: #D[*null*] ] ] ] ] ] ] HCONS: #D[*cons* FIRST: #D[qeq HARG: <0>=#D[h] LARG: <1>=#D[h]] REST: #D[*cons* FIRST: #D[qeq HARG: <6>=#D[h] LARG: <8>=#D[h]] REST: #D[*cons* FIRST: #D[qeq HARG: <12>=#D[h] LARG: <14>=#D[h]] REST: #D[*null*] ] ] ]] "Simple MRS"\x0c\r\n'''
 
+        cls.third_mrs_string = '''[ TOP: h0 INDEX: e2 [e  SF: prop TENSE: pres MOOD: indicative PROG: - PERF: -] RELS: < [pron_rel LBL: h4 ARG0: x3 [x  PERS: 1 NUM: sg PRONTYPE: std_pron]]  [pronoun_q_rel LBL: h5 ARG0: x3 [x  PERS: 1 NUM: sg PRONTYPE: std_pron] RSTR: h6 BODY: h7]  ["_think_v_1_rel" LBL: h1 ARG0: e2 [e  SF: prop TENSE: pres MOOD: indicative PROG: - PERF: -] ARG1: x3 [x  PERS: 1 NUM: sg PRONTYPE: std_pron] ARG2: h8 ARG3: i9]  [udef_q_rel LBL: h10 ARG0: x11 [x  PERS: 3 NUM: pl IND: +] RSTR: h12 BODY: h13]  [card_rel LBL: h14 CARG: \"3\" ARG0: e16 [e  SF: prop TENSE: untensed MOOD: indicative] ARG1: x11 [x  PERS: 3 NUM: pl IND: +]]  ["_zebra_n_1_rel" LBL: h14 ARG0: x11 [x  PERS: 3 NUM: pl IND: +]]  ["_fly_v_to_rel" LBL: h17 ARG0: e18 [e  SF: prop TENSE: past MOOD: indicative PROG: - PERF: -] ARG1: x11 [x  PERS: 3 NUM: pl IND: +] ARG2: x19 [x  PERS: 3 NUM: pl IND: +]]  [udef_q_rel LBL: h20 ARG0: x19 [x  PERS: 3 NUM: pl IND: +] RSTR: h21 BODY: h22]  ["_zeppelin_n_1_rel" LBL: h23 ARG0: x19 [x  PERS: 3 NUM: pl IND: +]]  [_over_p_rel LBL: h23 ARG0: e24 [e  SF: prop TENSE: untensed MOOD: indicative] ARG1: x19 [x  PERS: 3 NUM: pl IND: +] ARG2: x25 [x  PERS: 3 NUM: sg IND: +]]  [proper_q_rel LBL: h26 ARG0: x25 [x  PERS: 3 NUM: sg IND: +] RSTR: h27 BODY: h28]  [named_rel LBL: h29 CARG: \"Zimbabwe\" ARG0: x25 [x  PERS: 3 NUM: sg IND: +]] > HCONS: <  h0 qeq h1  h6 qeq h4  h8 qeq h17  h12 qeq h14  h21 qeq h23  h27 qeq h29  > ]'''
+
         ### AVM
         #### Build test AVM
 
@@ -537,13 +539,19 @@ tree 1 #T[11 "XP" nil 836 np_frg_c #T[12 "NP" nil 835 hdn_bnp_c #T[13 "N" nil 83
         self.assertTrue(isomorphic(__class__.goldMrs, result))
 
     
-    @unittest.skip
+
     def testLoadMrsOther(self):
         result = lui.load_mrs(__class__.other_mrs_string)
         # converted = lui._convert_lui_mrs_to_simple_mrs(__class__.other_mrs_string)
         # print(converted)
         # result = simplemrs.loads_one(converted)
         # print(result)
+        self.assertEqual("h0", result.top)
+        
+
+    def testLoadMrsThird(self):
+        result = lui.load_mrs(__class__.third_mrs_string)
+        self.assertEqual("h0", result.top)
         
 
     def testConvertLuiMrsToSimpleMrs(self):

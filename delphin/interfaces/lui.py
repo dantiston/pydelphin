@@ -285,6 +285,7 @@ lui_derivation_pattern = " ".join(("(?P<EDGE_ID>\d+)",
 
 
 tree_prefix = "tree "
+newlines = re.compile(r"\n{2,}")
 
 def load_derivations(string):
     """
@@ -297,7 +298,6 @@ def load_derivations(string):
         (tree <tree_ID> #T[<edge_ID> "?<label>"? ("<token>"|nil) <chart_ID> <rule_name> (#T[.*])?] "<text>"\n\n)*
 
     """
-    newlines = re.compile(r"\n{2,}")
     result = []
     for s in newlines.split(string):
         s = s.strip()
@@ -311,11 +311,14 @@ def load_derivations(string):
         # Initialize bracket pointers
         open_pattern, close_pattern = (re.escape(tree_bracket), re.escape(close_bracket))
         # Leaves and nodes contain non-whitespace, non-bracket characters
-        valid_chars = '[^\s%s%s]+' % (open_pattern, close_pattern)
-        bracket_patterns = '[%s%s]+' % (open_pattern, close_pattern)
+        valid_chars = '[^\s{open}{close}]+'.format(open=open_pattern, close=close_pattern)
+        bracket_patterns = '[{open}{close}]+'.format(open=open_pattern, close=close_pattern)
         # Construct a regexp that will tokenize the string.
-        token_re = re.compile('%s%s|%s|(%s)' % (
-            open_pattern, lui_derivation_pattern, close_pattern, valid_chars))
+        token_re = re.compile('{open}{derivation}|{close}|({chars})'.format(
+            open=open_pattern,
+            derivation=lui_derivation_pattern,
+            close=close_pattern,
+            chars=valid_chars))
         # Walk through each token, updating a stack of trees.
         stack = [(None, [])] # list of (node, children) tuples
         tokens = list(token_re.finditer(s))
@@ -603,12 +606,16 @@ def _convert_lui_mrs_to_simple_mrs(mrs_string):
     s = re.sub(r'REST:\s*#D\[\*cons\*\s*FIRST:', '', s)
     # reformat HCONS and ICONS
     s = re.sub(r'(HCONS|ICONS):\s*<([^>]*)>', _xcons_repl, s)
-    # reformat string values like CARG
-    s = re.sub(r'(\S+):\s*"(.*?)" ', r'\1: \2 ', s)
+    # reformat string values like CARG, removing optional escaping
+    s = re.sub(r'(\S+):\s*[\"\\]*"(.*?)"[\"\\]*', r'\1: \2 ', s)
     # remove any remaining #Ds
     s = re.sub(r'#D', '', s)
     # and re-add the last ] which was lost during cons-list conversion
     s = s + ' ]'
+
+    #import sys
+    #print(mrs_string, file=sys.stderr)
+    #print(s, file=sys.stderr)
     return s
 
 
